@@ -66,7 +66,6 @@ function [A, N, T, S, R, dv_start_length, solving_time, sol, fval] = optimalTask
     if ~exist('../log/', 'dir')
         mkdir('../log/')
     end
-    
 
     %% Load or create scenario
     % Scenario: predefined scenario (0 if random), number of agents, number of tasks, types of agents
