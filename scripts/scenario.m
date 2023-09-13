@@ -97,7 +97,7 @@ function [Agent, Task] = scenario(predefined, A, T, types)
             tmax_max = 2 * T * Te_max;
 
             % Color
-            color = [randi([0 255]) randi([0 255]) randi([0 255])];
+            color = [randi([0 255]) randi([0 255]) randi([0 255])]/255;
             % Make sure that the color isn't too dark to read black text over it
             if mean(color) < 0.6
                 color = [randi([0 255]) randi([0 255]) randi([0 255])];

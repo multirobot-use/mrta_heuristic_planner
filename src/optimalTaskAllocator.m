@@ -63,8 +63,8 @@ function [A, N, T, S, R, dv_start_length, solving_time, sol, fval] = optimalTask
     if ~exist('../fig/', 'dir')
         mkdir('../fig/')
     end
-    if ~exist('../log/', 'dir')
-        mkdir('../log/')
+    if ~exist('../logs/', 'dir')
+        mkdir('../logs/')
     end
 
     %% Load or create scenario
