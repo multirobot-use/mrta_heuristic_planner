@@ -38,6 +38,17 @@ function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] 
     %% Initialization
     tic;
 
+    % Create needed directories if they don't exists
+    if ~exist('../mat/', 'dir')
+        mkdir('../mat/')
+    end
+    if ~exist('../fig/', 'dir')
+        mkdir('../fig/')
+    end
+    if ~exist('../logs/', 'dir')
+        mkdir('../logs/')
+    end
+
     % Open a log file to write computing times
     if not(test_flag) && log_file_flag
         logFile = fopen('../logs/log.txt', 'a');
@@ -54,17 +65,6 @@ function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] 
         if log_file_flag
             fprintf(logFile, "%s\n\n", strcat("Execution ID: ", execution_id));
         end
-    end
-
-    % Create needed directories if they don't exists
-    if ~exist('../mat/', 'dir')
-        mkdir('../mat/')
-    end
-    if ~exist('../fig/', 'dir')
-        mkdir('../fig/')
-    end
-    if ~exist('../logs/', 'dir')
-        mkdir('../logs/')
     end
 
     %% Load or create scenario
