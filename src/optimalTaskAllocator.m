@@ -1,4 +1,4 @@
-function [A, N, T, S, R, dv_start_length, solving_time, sol, fval] = optimalTaskAllocator(scen, execution_id, A, T, types, recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag)
+function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] = optimalTaskAllocator(scen, execution_id, A, T, types, recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag)
     %% Parameters set up
     % Scenario
     if isnumeric(scen)
