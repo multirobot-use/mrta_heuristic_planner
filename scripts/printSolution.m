@@ -61,8 +61,6 @@ function printSolution(sol, fval, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv
         % Open a new figure
         figure();
         hold on;
-        grid;
-        grid minor;
         barWidth = 0.8;
 
         % Plot Agents' queue
@@ -88,42 +86,41 @@ function printSolution(sol, fval, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv
             end
 
             % Plot a's queue
-            if isempty(slot_duration)
-                slot_duration = 0;
-            end
-            gantt = barh(categorical({num2str(a)}), slot_duration, barWidth,'stacked');
-            times = barh(categorical({num2str(a)}), slot_phase_duration, barWidth/4,'stacked', 'FaceAlpha', 0);
+            if not(isempty(slot_duration))
+                gantt = barh(a, slot_duration, barWidth,'stacked', 'LineWidth', 1.5);
+                times = barh(a - 0.2, slot_phase_duration, barWidth/2,'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0);
 
-            % Change tasks colors and add task name
-            for s = 1:S
-                for t = 1:T
-                    if x_a_t_s(a,t + 1,s + 1)
-                        gantt(s).FaceColor = Task(t).color;
-                        text(gantt(s).YEndPoints - gantt(s).YData/2, gantt(s).XEndPoints + gantt(s).BarWidth/4, Task(t).name, 'FontSize', 16, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        if slot_phase_duration(3*(s-1) + 1)
-                            text(times((s-1)*3+1).YEndPoints - times((s-1)*3+1).YData/2, times((s-1)*3+1).XEndPoints, '', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        end
-                        if slot_phase_duration(3*(s-1) + 2)
-                            text(times((s-1)*3+2).YEndPoints - times((s-1)*3+2).YData/2, times((s-1)*3+2).XEndPoints, 'Tw', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        end
-                        if slot_phase_duration(3*(s-1) + 3)
-                            text(times((s-1)*3+3).YEndPoints - times((s-1)*3+3).YData/2, times((s-1)*3+3).XEndPoints, 'Te', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                % Change tasks colors and add task name
+                for s = 1:S
+                    for t = 1:T
+                        if x_a_t_s(a,t + 1,s + 1)
+                            gantt(s).FaceColor = Task(t).color;
+                            text(gantt(s).YEndPoints - gantt(s).YData/2, gantt(s).XEndPoints + gantt(s).BarWidth/4, Task(t).name, 'FontSize', 16, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            if slot_phase_duration(3*(s-1) + 1)
+                                text(times((s-1)*3+1).YEndPoints - times((s-1)*3+1).YData/2, times((s-1)*3+1).XEndPoints, 'T^d', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            end
+                            if slot_phase_duration(3*(s-1) + 2)
+                                text(times((s-1)*3+2).YEndPoints - times((s-1)*3+2).YData/2, times((s-1)*3+2).XEndPoints, 'T^w', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            end
+                            if slot_phase_duration(3*(s-1) + 3)
+                                text(times((s-1)*3+3).YEndPoints - times((s-1)*3+3).YData/2, times((s-1)*3+3).XEndPoints, 'T^e', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            end
                         end
                     end
                 end
             end
         end
         % Set axis labels
-        xlabel('Time (s)','FontSize', 16);
+        xlabel('Time (s)', 'FontSize', 16);
         ylabel('Robot','FontSize', 16);
+        yticks([1:A]);
+        ylim([0.5 A+0.5]);
 
         % Set axis font size
-        set(gca,'FontSize', 16);
+        set(gca,'FontSize', 16, 'XGrid', 'on', 'YGrid', 'off','xminorgrid','on');
 
         % Set title
-        % title(strcat('Agents'' queue execution: ', strrep(execution_id,'_','\_'), ' - Scenario: ', num2str(predefined), ' - Objective function: ', num2str(objective_function), ' - fval: ', num2str(fval)));
-        % Alternative title
-        % title(strcat('Agents'' queue.', ' - Scenario: ', num2str(predefined), 'fval: ', num2str(fval)));
+        title(strcat('Mission plan (', strrep(execution_id,'_','\_'), ') - Scenario: ', num2str(predefined), ' - fval: ', num2str(fval)));
         
         saveas(gcf, strcat("../fig/", execution_id), 'fig');
     end

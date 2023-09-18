@@ -1,19 +1,16 @@
-function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] = optimalTaskAllocator(scen, execution_id, A, T, types, recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag)
-    %% Parameters set up
-    % Scenario
-    if isnumeric(scen)
-        predefined = scen;
+function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
+    % scenario_id: numeric if predefined scenario, 0 if random, not numeric if saved scenario (saved scenario ID name)
+    % execution_id: used in log file and as file sufix to save data in case we want to save the results
+    % scenario size: 1x3 vector with the number of robots (A), number of tasks (T) (without counting the recharge task) and number of different types of robots (types). Used for random generated scenarios (scenario_id == 0)
+    % formulation_variants_flags: 1x4 logic vector (empty to use default config: complete formulation): [recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag]
+    % config_flags: 1x7 logic vector (empty to use default config): [save_flag, test_flag, solve_flag, recovery_flag, display_flag, log_file_flag, print_solution_flag]
+    if isnumeric(scenario_id)
+        predefined = scenario_id;
         old_executed_random_scenario_id = '';
     else
         predefined = 0;
-        old_executed_random_scenario_id = scen;
+        old_executed_random_scenario_id = scenario_id;
     end
-    % Number of agents
-    A = A;
-    % Number of tasks (plus 1 because of the recharge task)
-    T = T + 1;
-    % Types of different agents
-    types = types;
 
     % Objective function (options):
     %   - 1. Minimize the longest queue's execution time: min(max(tfin(a,S))).
@@ -23,17 +20,44 @@ function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] 
     % Solver configuration (options): 0. No output function, 1. Save best so far, 2. Stop at first valid solution.
     solver_config = 0;
 
-    save_flag                              = false;
-    test_flag                              = false;
-    solve_flag                             = true;
-    recovery_flag                          = false;
-    display_flag                           = false;
-    log_file_flag                          = false;
-    print_solution_flag                    = true;
-    recharges_allowed_flag                 = recharges_allowed_flag;
-    relays_allowed_flag                    = relays_allowed_flag;
-    fragmentation_allowed_flag             = fragmentation_allowed_flag;
-    variable_number_of_robots_allowed_flag = variable_number_of_robots_allowed_flag;
+    % Formulation variants flags
+    if nargin < 4 || isempty(formulation_variants_flags)
+        % Use complete formulation
+        recharges_allowed_flag                 = true;
+        relays_allowed_flag                    = true;
+        fragmentation_allowed_flag             = true;
+        variable_number_of_robots_allowed_flag = true;
+    else
+        recharges_allowed_flag                 = formulation_variants_flags(1);
+        relays_allowed_flag                    = formulation_variants_flags(2);
+        fragmentation_allowed_flag             = formulation_variants_flags(3);
+        variable_number_of_robots_allowed_flag = formulation_variants_flags(4);
+    end
+
+    % Configuration flags
+    if nargin < 5 || isempty(config_flags)
+        % Use default values
+        solve_flag                             = true;
+        print_solution_flag                    = false;
+        display_flag                           = false;
+        log_file_flag                          = false;
+        save_flag                              = false;
+        test_flag                              = false;
+        recovery_flag                          = false;
+    else
+        solve_flag                             = config_flags(1);
+        print_solution_flag                    = config_flags(2);
+        display_flag                           = config_flags(3);
+        log_file_flag                          = config_flags(4);
+        save_flag                              = config_flags(5);
+        test_flag                              = config_flags(6);
+        recovery_flag                          = config_flags(7);
+    end
+
+    % Set save_flag to 1 if scenario is gonna be randomly generated and print_solution_flag is off to be able later to load the scenario information to print the solution manually
+    if predefined == 0 && not(print_solution_flag)
+        save_flag = true;
+    end
 
     %% Initialization
     tic;
@@ -70,10 +94,13 @@ function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] 
     %% Load or create scenario
     % Scenario: predefined scenario (0 if random), number of agents, number of tasks, types of agents
     if isempty(old_executed_random_scenario_id)
-        [Agent, Task] = scenario(predefined, A, T, types);
+        if predefined == 0
+            [Agent, Task, A, N, T, S, R, Td_a_t_t, Te_t_nf] = scenario(scenario_size(1), scenario_size(2), scenario_size(3));
+        else
+            [Agent, Task, A, N, T, S, R, Td_a_t_t, Te_t_nf] = scenario(predefined);
+        end
     else
-        load(strcat('../mat/Agent_', old_executed_random_scenario_id, '.mat'));
-        load(strcat('../mat/Task_', old_executed_random_scenario_id, '.mat'));
+        [Agent, Task, A, N, T, S, R, Td_a_t_t, Te_t_nf] = scenario(old_executed_random_scenario_id);
     end
 
     % Save Agent and Task
@@ -83,6 +110,7 @@ function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] 
     end
 
     %% Set up the constant values
+    % Note: this parametes are already getted from scenario(), but we overwite them here just to b sure they are okay
     % Number of Agents
     A = length(Agent);
     if A < 1
@@ -102,9 +130,6 @@ function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] 
             break;
         end
     end
-
-    % Hardware types
-    Ht = types;
 
     % Safety minimum flight time (s)
     Ft_saf = 1*60;
@@ -645,11 +670,17 @@ function [Agent, Task, A, N, T, S, R, dv_start_length, solving_time, sol, fval] 
         parfor t = 1:T
             if t ~= R
                 Task(t).N_hardness = 1;
+                if Task(t).N == 0
+                    Task(t).N = 1;
+                end
             end
         end
     end
 
     if test_flag
+        sol = [];
+        fval = 0;
+        solving_time = 0;
         return;
     end
 
