@@ -36,7 +36,7 @@ Inside this file there is a function defined as:
 ```
 function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
 ```
-First, the `scenario\_id` parameter should be numeric if we want to solve a manually predefined [scenario](scripts/scenario.m), `0` if we want to solve a randomly generated scenario, and should be not numeric if we want to solve a saved scenario. In this last case `scenario\_id` should be the ID name string of the saved scenario.
+First, the `scenario_id` parameter should be numeric if we want to solve a manually predefined [scenario](scripts/scenario.m), `0` if we want to solve a randomly generated scenario, and should be not numeric if we want to solve a saved scenario. In this last case `scenario_id` should be the ID name string of the saved scenario.
 
 Second, the `execution_id` parameter is a string, used in the log file and as file sufix to save the scenario information.
 
@@ -69,7 +69,7 @@ After running the `optimalTaskAllocator()` function, we can check the values of 
 Where `scenario_id` is the id of the scenario just solved.
 
 Now the `Agent` and `Task` structures with the scenario information are loaded. We can see also `A`, that is the number of
-robots, `T`, the number of tasks including the Recharge task, `S`, the length of the robot's queue, `N`, maximum estimated number of fragments, `Td\_a\_t\_t` is a `A`x`T`x`T+1` array, `Td\_a\_t\_t(a, t2, t1)` would be the time it takes for robot `a` to move from task `t1`location to task `t2` location, and `Te\_t\_nf` is a `T`x`N` array, where `Te\_t\_nf(t,nf)` would be the time it takes for task `t` to execute if it where divided into `nf` fragments.
+robots, `T`, the number of tasks including the Recharge task, `S`, the length of the robot's queue, `N`, maximum estimated number of fragments, `Td_a_t_t` is a `A`x`T`x`T+1` array, `Td_a_t_t(a, t2, t1)` would be the time it takes for robot `a` to move from task `t1`location to task `t2` location, and `Te_t_nf` is a `T`x`N` array, where `Te_t_nf(t,nf)` would be the time it takes for task `t` to execute if it where divided into `nf` fragments.
 
 With this information and the information returned by the `optimalTaskAllocator()`, we can call `getVarValue()`. Lets
 check for examples how mane fragments are task being divided into:
