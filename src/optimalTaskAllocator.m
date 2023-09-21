@@ -131,6 +131,16 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
         end
     end
 
+    % N == 0 are unspecified type tasks. They are treated as fragmentable tasks:
+    parfor t = 1:T
+        if t ~= R
+            if Task(t).N == 0
+                Task(t).Relayability = 0;
+                Task(t).Fragmentability = 1;
+            end
+        end
+    end
+
     % Safety minimum flight time (s)
     Ft_saf = 1*60;
 
@@ -207,7 +217,7 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     end
 
     % U is normalized by scaling its value between the theoretical maximum and minimum value for the total vacancies.
-    % Task.N = 0 -> not specified, so if the task is fragmentable, the number of selected Agents would be >= 1, if not, it should be 1, but in neither case it would penalize in the objective function.
+    % Task.N = 0 -> not specified, it doesn't penalize in the objective function.
     % Task.N ~= 0 -> specified, so the number of selected Agents should be equal to Task.N, if not, it would penalize in the objective function.
     % The vacancies minimum value is 0, while the maximum value can be computed as sum from t = 2 to T of (max(A-Task(t).N, Task(t).N - 1))
     U_max = 0;
@@ -316,8 +326,6 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
     % Ftx_a_s1:            (Real)    aux decision variable to linearize the product of x_a_1_s1 and Ft_a_s1.
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
-    % tmax_a_s:            (Real)    maximum time to finish executing the task in the slot s of the agent a.
-    % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
     % tfin_a_s:            (Real)    time at with slot s of agent a ends it execution.
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
     % tfinx_a_t_s:         (Real)    aux decision variable to linearize the product of tfin_a_s and x_a_t_s.
@@ -362,7 +370,6 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     length_nax_a_t_s           = A*T*S;
     length_Ft_a_s              = A*(S+1);
     length_Ftx_a_s1            = A*S;
-    length_tmax_a_s            = A*S;
     length_tfin_a_s            = A*(S+1);
     length_tfinx_a_t_s         = A*T*S;
     length_d_tmax_tfin_a_s     = A*S;
@@ -394,8 +401,7 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     start_nax_a_t_s           = start_naf_t_nf            + length_naf_t_nf;
     start_Ft_a_s              = start_nax_a_t_s           + length_nax_a_t_s;
     start_Ftx_a_s1            = start_Ft_a_s              + length_Ft_a_s;
-    start_tmax_a_s            = start_Ftx_a_s1            + length_Ftx_a_s1;
-    start_tfin_a_s            = start_tmax_a_s            + length_tmax_a_s;
+    start_tfin_a_s            = start_Ftx_a_s1            + length_Ftx_a_s1;
     start_tfinx_a_t_s         = start_tfin_a_s            + length_tfin_a_s;
     start_d_tmax_tfin_a_s     = start_tfinx_a_t_s         + length_tfinx_a_t_s;
     start_s_used              = start_d_tmax_tfin_a_s     + length_d_tmax_tfin_a_s;
@@ -410,7 +416,7 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     start_TeR_t_a1_s1_a2_s2   = start_tfinR_t_a1_s1_a2_s2 + length_tfinR_t_a1_s1_a2_s2;
 
     % Compute the total length of the decision variable vector:
-    length_dv = length_z + length_x_a_t_s + length_xx_a_t_t_s + length_V_t + length_U_t + length_n_t + length_na_t + length_nq_t + length_nq_a_t + length_nf_t + length_nf_t_nf + length_nfx_a_nf_t_s + length_naf_t_nf + length_nax_a_t_s + length_Ft_a_s + length_Ftx_a_s1 + length_tmax_a_s + length_tfin_a_s + length_tfinx_a_t_s + length_d_tmax_tfin_a_s + length_s_used + length_Td_a_s + length_Tw_a_s + length_Twx_a_s + length_Te_a_s + length_S_t_a1_s1_a2_s2 + length_tfinS_t_a1_s1_a2_s2 + length_R_t_a1_s1_a2_s2 + length_tfinR_t_a1_s1_a2_s2 + length_TeR_t_a1_s1_a2_s2;
+    length_dv = length_z + length_x_a_t_s + length_xx_a_t_t_s + length_V_t + length_U_t + length_n_t + length_na_t + length_nq_t + length_nq_a_t + length_nf_t + length_nf_t_nf + length_nfx_a_nf_t_s + length_naf_t_nf + length_nax_a_t_s + length_Ft_a_s + length_Ftx_a_s1 + length_tfin_a_s + length_tfinx_a_t_s + length_d_tmax_tfin_a_s + length_s_used + length_Td_a_s + length_Tw_a_s + length_Twx_a_s + length_Te_a_s + length_S_t_a1_s1_a2_s2 + length_tfinS_t_a1_s1_a2_s2 + length_R_t_a1_s1_a2_s2 + length_tfinR_t_a1_s1_a2_s2 + length_TeR_t_a1_s1_a2_s2;
 
     % Maximum number of sparse terms per decision variable
     N_Hard_eq_sparse_terms            = (T - 1) * 1;
@@ -425,8 +431,7 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     na_nq_t_ineq_sparse_terms         = T * 2;
     na_nf_n_t_eq_sparse_terms         = T * (1 + N * 1);
     naf_t_nf_ineq_sparse_terms        = (T * N) * 10;
-    d_tmax_tfin_a_s_ineq_sparse_terms = (A * S) * 3;
-    t_max_a_s_eq_sparse_terms         = (A * S) * (1 + T * 1);
+    d_tmax_tfin_a_s_ineq_sparse_terms = (A * S) * (T * 2 + 1);
     t_fin_a_s_eq_sparse_terms         = A * (1 + S * (4 + T * 1));
     Ft_a_s_ineq_sparse_terms          = (A * S) * 1;
     Ft_a_s_eq_sparse_terms            = A * (1 + S * (6 + (T - 1) * N * 1));
@@ -437,14 +442,14 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     max_ineq_sparse_terms             = A * S * 1 * (T+1);
     continuity_ineq_sparse_terms      = A * (S - 1) * 2 * T;
     s_used_eq_sparse_terms            = 1 + A * (T+1) * (S+1);
-    synch_eq_sparse_terms             = ((T - 1) * A * S) * ((A * S) * 2 + (2 + (A * S) * 1));
+    synch_eq_sparse_terms             = ((T - 1) * A * S) * ((A * S) * (2 + 2) + (2 + (A * S) * 1));
     synch_ineq_sparse_terms           = ((T - 1) * A * S * A * S) * (2 + 2 + 20);
     relays_eq_sparse_terms            = (T - 1) * (2 + (A * S * A * S) * (3 + 1));
-    relays_ineq_sparse_terms          = ((T - 1) * A * S * A * S) * (2 + 2 + 3 + 30 + 1 + 1);
+    relays_ineq_sparse_terms          = ((T - 1) * A * S * A * S) * (2 + 2 + 30 + 1 + 1);
     linearizations_ineq_sparse_terms  = (A * S * (T * ((T + 1) * 7 + N * 7 + 20) + 20));
 
     % Max number of sparse terms in the matrixes
-    max_eq_sparse_terms = N_Hard_eq_sparse_terms + Non_decomposable_eq_sparse_terms + Td_a_s_eq_sparse_terms + Te_a_s_eq_sparse_terms + n_t_eq_sparse_terms + nf_t_nf_eq_sparse_terms + nq_t_eq_sparse_terms + na_nf_n_t_eq_sparse_terms + t_max_a_s_eq_sparse_terms + t_fin_a_s_eq_sparse_terms + Ft_a_s_eq_sparse_terms + V_t_eq_sparse_terms + s_used_eq_sparse_terms + synch_eq_sparse_terms + relays_eq_sparse_terms;
+    max_eq_sparse_terms = N_Hard_eq_sparse_terms + Non_decomposable_eq_sparse_terms + Td_a_s_eq_sparse_terms + Te_a_s_eq_sparse_terms + n_t_eq_sparse_terms + nf_t_nf_eq_sparse_terms + nq_t_eq_sparse_terms + na_nf_n_t_eq_sparse_terms + t_fin_a_s_eq_sparse_terms + Ft_a_s_eq_sparse_terms + V_t_eq_sparse_terms + s_used_eq_sparse_terms + synch_eq_sparse_terms + relays_eq_sparse_terms;
     max_ineq_sparse_terms = z_ineq_sparse_terms + nq_a_t_ineq_sparse_terms + na_nq_t_ineq_sparse_terms + naf_t_nf_ineq_sparse_terms + d_tmax_tfin_a_s_ineq_sparse_terms + Ft_a_s_ineq_sparse_terms + U_t_ineq_sparse_terms + recharge_ineq_sparse_terms + hardware_ineq_sparse_terms + max_ineq_sparse_terms + continuity_ineq_sparse_terms + synch_ineq_sparse_terms + relays_ineq_sparse_terms + linearizations_ineq_sparse_terms;
 
     % Maximum number of independent terms per decision variable
@@ -461,7 +466,6 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     na_nf_n_t_eq_independent_sparse_terms         = 0;
     naf_t_nf_ineq_independent_sparse_terms        = (T * N) * 2;
     d_tmax_tfin_a_s_ineq_independent_sparse_terms = 0;
-    t_max_a_s_eq_independent_sparse_terms         = 0;
     t_fin_a_s_eq_independent_sparse_terms         = 0;
     Ft_a_s_ineq_independent_sparse_terms          = (A * S) * 1;
     Ft_a_s_eq_independent_sparse_terms            = A * 1;
@@ -479,7 +483,7 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     linearizations_ineq_independent_sparse_terms  = (A * S * (T * ((T + 1) * 1 + N * 1 + 4) + 4));
 
     % Max number of sparse terms in the independent terms
-    max_eq_independent_sparse_terms = N_Hard_eq_independent_sparse_terms + Non_decomposable_eq_independent_sparse_terms + Td_a_s_eq_independent_sparse_terms + Te_a_s_eq_independent_sparse_terms + n_t_eq_independent_sparse_terms + nf_t_nf_eq_independent_sparse_terms + nq_t_eq_independent_sparse_terms + na_nf_n_t_eq_independent_sparse_terms + t_max_a_s_eq_independent_sparse_terms + t_fin_a_s_eq_independent_sparse_terms + Ft_a_s_eq_independent_sparse_terms + V_t_eq_independent_sparse_terms + s_used_eq_independent_sparse_terms + synch_eq_independent_sparse_terms + relays_eq_independent_sparse_terms;
+    max_eq_independent_sparse_terms = N_Hard_eq_independent_sparse_terms + Non_decomposable_eq_independent_sparse_terms + Td_a_s_eq_independent_sparse_terms + Te_a_s_eq_independent_sparse_terms + n_t_eq_independent_sparse_terms + nf_t_nf_eq_independent_sparse_terms + nq_t_eq_independent_sparse_terms + na_nf_n_t_eq_independent_sparse_terms + t_fin_a_s_eq_independent_sparse_terms + Ft_a_s_eq_independent_sparse_terms + V_t_eq_independent_sparse_terms + s_used_eq_independent_sparse_terms + synch_eq_independent_sparse_terms + relays_eq_independent_sparse_terms;
     max_ineq_independent_sparse_terms = z_ineq_independent_sparse_terms + nq_a_t_ineq_independent_sparse_terms + na_nq_t_ineq_independent_sparse_terms + naf_t_nf_ineq_independent_sparse_terms + d_tmax_tfin_a_s_ineq_independent_sparse_terms + Ft_a_s_ineq_independent_sparse_terms + U_t_ineq_independent_sparse_terms + recharge_ineq_independent_sparse_terms + hardware_ineq_independent_sparse_terms + max_ineq_independent_sparse_terms + continuity_ineq_independent_sparse_terms + synch_ineq_independent_sparse_terms + relays_ineq_independent_sparse_terms + linearizations_ineq_independent_sparse_terms;
 
     % Maximum number of equations per decision variable
@@ -496,7 +500,6 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     na_nf_n_t_eq         = T * 1;
     naf_t_nf_ineq        = (T * N) * 4;
     d_tmax_tfin_a_s_ineq = (A * S) * 1;
-    t_max_a_s_eq         = (A * S) * 1;
     t_fin_a_s_eq         = A * (1 + S * 1);
     Ft_a_s_ineq          = (A * S) * 1;
     Ft_a_s_eq            = A * (1 + S * 1);
@@ -507,14 +510,14 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     max1task_ineq        = A * S * 1;
     continuity_ineq      = A * (S - 1) * 1;
     s_used_eq            = 1;
-    synch_eq             = ((T - 1) * A * S) * ((A * S) * 1 + 1);
+    synch_eq             = ((T - 1) * A * S) * ((A * S) * (1 + 1) + 1);
     synch_ineq           = ((T - 1) * A * S * A * S) * (1 + 1 + 8);
     relays_eq            = (T - 1) * ((A * S * A * S) * 1 + 1);
-    relays_ineq          = ((T - 1) * A * S) * ((A * S) * (1 + 1 + 1 + 12) + 1 + 1);
+    relays_ineq          = ((T - 1) * A * S) * ((A * S) * (1 + 1 + 12) + 1 + 1);
     linearizations_ineq  = (A * S * (T * ((T + 1) * 3 + N * 3 + 8) + 8));
 
     % Max number of equations (rows in A and Aeq)
-    max_eq = N_Hard_eq + Non_decomposable_eq + Td_a_s_eq + Te_a_s_eq + n_t_eq + nf_t_nf_eq + nq_t_eq + na_nf_n_t_eq + t_max_a_s_eq + t_fin_a_s_eq + Ft_a_s_eq + V_t_eq + s_used_eq + synch_eq + relays_eq;
+    max_eq = N_Hard_eq + Non_decomposable_eq + Td_a_s_eq + Te_a_s_eq + n_t_eq + nf_t_nf_eq + nq_t_eq + na_nf_n_t_eq + t_fin_a_s_eq + Ft_a_s_eq + V_t_eq + s_used_eq + synch_eq + relays_eq;
     max_ineq = z_ineq + nq_a_t_ineq + na_nq_t_ineq + naf_t_nf_ineq + d_tmax_tfin_a_s_ineq + Ft_a_s_ineq + U_t_ineq + recharge_ineq + hardware_ineq + max1task_ineq + continuity_ineq + synch_ineq + relays_ineq + linearizations_ineq;
 
     % Start index for each equation
@@ -526,8 +529,7 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     start_nf_t_nf_eq           = start_n_t_eq               + n_t_eq;
     start_nq_t_eq              = start_nf_t_nf_eq           + nf_t_nf_eq;
     start_na_nf_n_t_eq         = start_nq_t_eq              + nq_t_eq;
-    start_t_max_a_s_eq         = start_na_nf_n_t_eq         + na_nf_n_t_eq;
-    start_t_fin_a_s_eq         = start_t_max_a_s_eq         + t_max_a_s_eq;
+    start_t_fin_a_s_eq         = start_na_nf_n_t_eq         + na_nf_n_t_eq;
     start_Ft_a_s_eq            = start_t_fin_a_s_eq         + t_fin_a_s_eq;
     start_V_t_eq               = start_Ft_a_s_eq            + Ft_a_s_eq;
     start_s_used_eq            = start_V_t_eq               + V_t_eq;
@@ -550,7 +552,7 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     start_linearizations_ineq  = start_relays_ineq          + relays_ineq;
 
     % Put all decision variable starting positions and lengths together in a dictionary using the var names as keys and the starting positions as values:
-    dv_start_length = containers.Map({'z', 'x_a_t_s', 'xx_a_t_t_s', 'V_t', 'U_t', 'n_t', 'na_t', 'nq_t', 'nq_a_t', 'nf_t', 'nf_t_nf', 'nfx_a_nf_t_s', 'naf_t_nf', 'nax_a_t_s', 'Ft_a_s', 'Ftx_a_s1', 'tmax_a_s', 'tfin_a_s', 'tfinx_a_t_s', 'd_tmax_tfin_a_s', 's_used', 'Td_a_s', 'Tw_a_s', 'Twx_a_s', 'Te_a_s','S_t_a1_s1_a2_s2', 'tfinS_t_a1_s1_a2_s2', 'R_t_a1_s1_a2_s2', 'tfinR_t_a1_s1_a2_s2', 'TeR_t_a1_s1_a2_s2'}, {[start_z length_z], [start_x_a_t_s length_x_a_t_s], [start_xx_a_t_t_s length_xx_a_t_t_s], [start_V_t length_V_t], [start_U_t length_U_t], [start_n_t length_n_t], [start_na_t length_na_t], [start_nq_t length_nq_t], [start_nq_a_t length_nq_a_t], [start_nf_t length_nf_t], [start_nf_t_nf length_nf_t_nf], [start_nfx_a_nf_t_s length_nfx_a_nf_t_s], [start_naf_t_nf length_naf_t_nf], [start_nax_a_t_s length_nax_a_t_s], [start_Ft_a_s length_Ft_a_s], [start_Ftx_a_s1 length_Ftx_a_s1], [start_tmax_a_s length_tmax_a_s], [start_tfin_a_s length_tfin_a_s], [start_tfinx_a_t_s length_tfinx_a_t_s], [start_d_tmax_tfin_a_s length_d_tmax_tfin_a_s], [start_s_used length_s_used], [start_Td_a_s length_Td_a_s], [start_Tw_a_s length_Tw_a_s], [start_Twx_a_s length_Twx_a_s], [start_Te_a_s length_Te_a_s], [start_S_t_a1_s1_a2_s2 length_S_t_a1_s1_a2_s2], [start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2], [start_R_t_a1_s1_a2_s2 length_R_t_a1_s1_a2_s2], [start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2], [start_TeR_t_a1_s1_a2_s2 length_TeR_t_a1_s1_a2_s2]});
+    dv_start_length = containers.Map({'z', 'x_a_t_s', 'xx_a_t_t_s', 'V_t', 'U_t', 'n_t', 'na_t', 'nq_t', 'nq_a_t', 'nf_t', 'nf_t_nf', 'nfx_a_nf_t_s', 'naf_t_nf', 'nax_a_t_s', 'Ft_a_s', 'Ftx_a_s1', 'tfin_a_s', 'tfinx_a_t_s', 'd_tmax_tfin_a_s', 's_used', 'Td_a_s', 'Tw_a_s', 'Twx_a_s', 'Te_a_s','S_t_a1_s1_a2_s2', 'tfinS_t_a1_s1_a2_s2', 'R_t_a1_s1_a2_s2', 'tfinR_t_a1_s1_a2_s2', 'TeR_t_a1_s1_a2_s2'}, {[start_z length_z], [start_x_a_t_s length_x_a_t_s], [start_xx_a_t_t_s length_xx_a_t_t_s], [start_V_t length_V_t], [start_U_t length_U_t], [start_n_t length_n_t], [start_na_t length_na_t], [start_nq_t length_nq_t], [start_nq_a_t length_nq_a_t], [start_nf_t length_nf_t], [start_nf_t_nf length_nf_t_nf], [start_nfx_a_nf_t_s length_nfx_a_nf_t_s], [start_naf_t_nf length_naf_t_nf], [start_nax_a_t_s length_nax_a_t_s], [start_Ft_a_s length_Ft_a_s], [start_Ftx_a_s1 length_Ftx_a_s1], [start_tfin_a_s length_tfin_a_s], [start_tfinx_a_t_s length_tfinx_a_t_s], [start_d_tmax_tfin_a_s length_d_tmax_tfin_a_s], [start_s_used length_s_used], [start_Td_a_s length_Td_a_s], [start_Tw_a_s length_Tw_a_s], [start_Twx_a_s length_Twx_a_s], [start_Te_a_s length_Te_a_s], [start_S_t_a1_s1_a2_s2 length_S_t_a1_s1_a2_s2], [start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2], [start_R_t_a1_s1_a2_s2 length_R_t_a1_s1_a2_s2], [start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2], [start_TeR_t_a1_s1_a2_s2 length_TeR_t_a1_s1_a2_s2]});
 
     %% Optimization
     tic;
@@ -561,8 +563,8 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     Aeq_double_sparse = spalloc(max_eq,   length_dv, max_eq_sparse_terms);
     beq_double_sparse = spalloc(max_eq,           1, max_eq_independent_sparse_terms);
 
-    % dv = [z,      x_a_t_s,   xx_a_t_t_s,   V_t,    U_t,    n_t,       na_t,      nq_t,      nq_a_t,   nf_t,      nf_t_nf,   nfx_a_nf_t_s,   naf_t_nf,   nax_a_t_s,   Ft_a_s,   Ftx_a_s1,   tmax_a_s,   tfin_a_s,   tfinx_a_t_s,   d_tmax_tfin_a_s,   s_used,    Td_a_s,    Tw_a_s,    Twx_a_s,    Te_a_s,    S_t_a1_s1_a2_s2,    tfinS_t_a1_s1_a2_s2,    R_t_a1_s1_a2_s2,    tfinR_t_a1_s1_a2_s2,    TeR_t_a1_s1_a2_s2];
-    %      [Real,   Binary,    Binary,       Real,   Real,   Natural,   Natural,   Natural,   Binary,   Natural,   Binary,    Binary,         Natural,    Natural,     Real,     Real,       Real,       Real,       Real,          Real,              Natural,   Real,      Real,      Real,       Real,      Binary,             Real,                   Binary,             Real               ,    Real             ];
+    % dv = [z,      x_a_t_s,   xx_a_t_t_s,   V_t,    U_t,    n_t,       na_t,      nq_t,      nq_a_t,   nf_t,      nf_t_nf,   nfx_a_nf_t_s,   naf_t_nf,   nax_a_t_s,   Ft_a_s,   Ftx_a_s1,   tfin_a_s,   tfinx_a_t_s,   d_tmax_tfin_a_s,   s_used,    Td_a_s,    Tw_a_s,    Twx_a_s,    Te_a_s,    S_t_a1_s1_a2_s2,    tfinS_t_a1_s1_a2_s2,    R_t_a1_s1_a2_s2,    tfinR_t_a1_s1_a2_s2,    TeR_t_a1_s1_a2_s2];
+    %      [Real,   Binary,    Binary,       Real,   Real,   Natural,   Natural,   Natural,   Binary,   Natural,   Binary,    Binary,         Natural,    Natural,     Real,     Real,       Real,       Real,          Real,              Natural,   Real,      Real,      Real,       Real,      Binary,             Real,                   Binary,             Real               ,    Real             ];
 
     % Specify optimization variables that are integers/natural (or binary). Indexed of the variables that must be integers/natural (or binary with bounds).
     intcon = [  start_x_a_t_s         : start_x_a_t_s         + length_x_a_t_s         - 1, ...
@@ -936,38 +938,21 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     %% d_tmax_tfin_a_s
     % It's only penalized when tfin(a,s) > tmax(a,s), so we force d_tmax_tfin_a_s >= 0 and then we only have to compute the following eq. avoiding to compute the absolute value.
     % d_tmax_tfin_a_s >= tfin(a,s) * sum from t = 1 to T of (x(a,t,s)) - tmax(a,s), for all a = 1 to A and s = 1 to S
-    % d_tmax_tfin_a_s >= sum from t = 1 to T of (tfin(a,s) * x(a,t,s)) - tmax(a,s), for all a = 1 to A and s = 1 to S
-    % d_tmax_tfin_a_s >= sum from t = 1 to T of (tfinx(a,t,s)) - tmax(a,s), for all a = 1 to A and s = 1 to S
+    % d_tmax_tfin_a_s >= sum from t = 1 to T of (tfin(a,s) * x(a,t,s)) - sum from t = 1 to T of (tmax(t)*x(a,t,s)), for all a = 1 to A and s = 1 to S
+    % d_tmax_tfin_a_s >= sum from t = 1 to T of (tfinx(a,t,s) - tmax(t)*x(a,t,s)), for all a = 1 to A and s = 1 to S
     parfor a = 1:A
         for s = 1:S
             A_tmp = spalloc(max_ineq, length_dv, 3);
-            b_tmp = spalloc(max_ineq, 1, 1);
             % tfin(a,s)*x(a,t,s) -> tfinx_a_t_s
             % tfinx_(a,t,s) - tmax(a,s) - d_tmax_tfin_a_s <= 0
             for t = 1:T
                 A_tmp((start_d_tmax_tfin_a_s_ineq - 1) + (a + (s - 1)*A), (start_tfinx_a_t_s - 1) + (a + (t - 1)*A + (s - 1)*A*T)) = 1;
+                % - tmax(t) * x(a,t,s)
+                A_tmp((start_d_tmax_tfin_a_s_ineq - 1) + (a + (s - 1)*A), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = - Task(t).tmax;
             end
-            A_tmp((start_d_tmax_tfin_a_s_ineq - 1) + (a + (s - 1)*A), (start_tmax_a_s - 1) + (a + (s - 1)*A)) = -1;
             A_tmp((start_d_tmax_tfin_a_s_ineq - 1) + (a + (s - 1)*A), (start_d_tmax_tfin_a_s - 1) + (a + (s - 1)*A)) = -1;
-            b_tmp((start_d_tmax_tfin_a_s_ineq - 1) + (a + (s - 1)*A)) = 0;
             % Add the new row and independent term to the corresponding matrix
             A_double_sparse = A_double_sparse + A_tmp;
-            b_double_sparse = b_double_sparse + b_tmp;
-        end
-    end
-
-    % tmax(a,s) = sum from t = 1 to T of tmax(t)*x(a,t,s), for all a = 1 to A and s = 1 to S
-    parfor a = 1:A
-        for s = 1:S
-            A_tmp = spalloc(max_eq, length_dv, (1 + T * 1));
-            % - tmax(a,s) + sum from t = 1 to T of tmax(t)*x(a,t,s) = 0
-            A_tmp((start_t_max_a_s_eq - 1) + (a + (s - 1)*A), (start_tmax_a_s - 1) + (a + (s - 1)*A)) = -1;
-            for t = 1:T
-                % tmax(t) * x(a,t,s)
-                A_tmp((start_t_max_a_s_eq - 1) + (a + (s - 1)*A), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = Task(t).tmax;
-            end
-            % Add the new row and independent term to the corresponding matrix
-            Aeq_double_sparse = Aeq_double_sparse + A_tmp;
         end
     end
 
@@ -1256,6 +1241,14 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
                                     b_tmp((start_synch_ineq - 1 + 9*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
+
+                                    % All synchronizations must be bidirectional
+                                    % S(t, a1, s1, a2, s2) = S(t, a2, s2, a1, s1)
+                                    % S(t, a1, s1, a2, s2) - S(t, a2, s2, a1, s1) = 0
+                                    A_tmp = spalloc(max_eq, length_dv, 2);
+                                    A_tmp((start_synch_eq - 1 + ((T - 1) * A * S) + ((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
+                                    A_tmp((start_synch_eq - 1 + ((T - 1) * A * S) + ((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A + (a1 - 1)*(T-1)*A*S + (s1 - 1)*(T-1)*A*S*A)) = -1;
+                                    Aeq_double_sparse = Aeq_double_sparse + A_tmp;
                                 end
                             end
                         end
@@ -1286,7 +1279,7 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
     parfor t = 1:T
         if t ~= R
             % The constraints could be applied only to relayable or fragmentable tasks
-            if Task(t).Relayability == 1 || Task(t).Fragmentability == 1
+            if Task(t).Relayability == 1
                 for a1 = 1:A
                     for s1 = 1:S
                         for a2 = 1:A
@@ -1308,29 +1301,16 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
                                     A_double_sparse = A_double_sparse + A_tmp;
 
                                     % Relays time coordination
-                                    if Task(t).Relayability == 1
-                                        % tfin(a1,s1)*R(t,a1,s1,a2,s2) = (tfin(a2,s2) - Te(a2,s2))*R(t,a1,s1,a2,s2), for all t in [2,T], a1,a2 in A, s1,s2 in S, not(a1 == a2 && s1 == s2)
-                                        % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
-                                        % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
-                                        % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
-                                        A_tmp = spalloc(max_eq, length_dv, 3);
-                                        % tfinR(1,t,a1,s1,a2,s2) - tfinR(2,t,a1,s1,a2,s2) + TeR(t,a1,s1,a2,s2) = 0
-                                        A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
-                                        A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
-                                        A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
-                                        Aeq_double_sparse = Aeq_double_sparse + A_tmp;
-                                    else
-                                        % tfin(a1,s1)*R(t,a1,s1,a2,s2) <= (tfin(a2,s2) - Te(a2,s2))*R(t,a1,s1,a2,s2), for all t in [2,T], a1,a2 in A, s1,s2 in S, not(a1 == a2 && s1 == s2)
-                                        % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
-                                        % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
-                                        % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
-                                        A_tmp = spalloc(max_ineq, length_dv, 3);
-                                        % tfinR(1,t,a1,s1,a2,s2) - tfinR(2,t,a1,s1,a2,s2) + TeR(t,a1,s1,a2,s2) <= 0
-                                        A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 2*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
-                                        A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 2*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
-                                        A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 2*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
-                                        A_double_sparse = A_double_sparse + A_tmp;
-                                    end
+                                    % tfin(a1,s1)*R(t,a1,s1,a2,s2) = (tfin(a2,s2) - Te(a2,s2))*R(t,a1,s1,a2,s2), for all t in [2,T], a1,a2 in A, s1,s2 in S, not(a1 == a2 && s1 == s2)
+                                    % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
+                                    % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
+                                    % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
+                                    A_tmp = spalloc(max_eq, length_dv, 3);
+                                    % tfinR(1,t,a1,s1,a2,s2) - tfinR(2,t,a1,s1,a2,s2) + TeR(t,a1,s1,a2,s2) = 0
+                                    A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
+                                    A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
+                                    A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
+                                    Aeq_double_sparse = Aeq_double_sparse + A_tmp;
 
                                     % Add constraints to force the value of the tfinR(i,t,a1,s1,a2,s2) and TeR(t,a1,s1,a2,s2) aux variables to be the same as their original hight order terms.
                                     % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)

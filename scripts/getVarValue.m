@@ -33,8 +33,6 @@ function [var_value] = getVarValue(display_flag, sol, A, N, T, S, dv_start_lengt
                     var_value = reshape(var_value, A, (S+1));
                 case 'Ftx_a_s1'
                     var_value = reshape(var_value, A, S);
-                case 'tmax_a_s'
-                    var_value = reshape(var_value, A, S);
                 case 'tfin_a_s'
                     var_value = reshape(var_value, A, (S+1));
                 case 'tfinx_a_t_s'
@@ -102,8 +100,6 @@ function [var_value] = getVarValue(display_flag, sol, A, N, T, S, dv_start_lengt
                 case 'Ft_a_s'
                     var_value = sol((start - 1) + sub2ind([A, (S+1)], idx(1), idx(2) + 1));
                 case 'Ftx_a_s1'
-                    var_value = sol((start - 1) + sub2ind([A, S], idx(1), idx(2)));
-                case 'tmax_a_s'
                     var_value = sol((start - 1) + sub2ind([A, S], idx(1), idx(2)));
                 case 'tfin_a_s'
                     var_value = sol((start - 1) + sub2ind([A, (S+1)], idx(1), idx(2) + 1));
