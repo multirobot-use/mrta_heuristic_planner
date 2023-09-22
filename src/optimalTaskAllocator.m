@@ -1,4 +1,4 @@
-function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
+function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
     % scenario_id: numeric if predefined scenario, 0 if random, not numeric if saved scenario (saved scenario ID name)
     % execution_id: used in log file and as file sufix to save data in case we want to save the results
     % scenario size: 1x3 vector with the number of robots (A), number of tasks (T) (without counting the recharge task) and number of different types of robots (types). Used for random generated scenarios (scenario_id == 0)
@@ -683,7 +683,12 @@ function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scena
         sol = [];
         fval = 0;
         solving_time = 0;
+        save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'Ft_saf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
         return;
+    end
+
+    if save_flag
+        save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'Ft_saf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
     end
 
     %% Equations and constraints

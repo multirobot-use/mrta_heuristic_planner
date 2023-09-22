@@ -34,7 +34,7 @@ You may also want to install [Gurobi](https://www.gurobi.com/) for Matlab to use
 The main script, which implements and solves the MILP formulation, is [optimalTaskAllocator.m](src/optimalTaskAllocator.m).
 Inside this file there is a function defined as:
 ```
-function [sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
+function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
 ```
 First, the `scenario_id` parameter should be numeric if we want to solve a manually predefined [scenario](scripts/scenario.m), `0` if we want to solve a randomly generated scenario, and should be not numeric if we want to solve a saved scenario. In this last case `scenario_id` should be the ID name string of the saved scenario.
 
@@ -49,15 +49,15 @@ Last, `config_flags` parameter is a 1x7 logic vector corresponding to the follow
 In this way, we can run the planner to solve a ramdomly generated scenario with `3` robots, `2` tasks and `1` defferent
 type of robot like:
 ```
-[sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(0, 'random', [3 2 1]);
+[sol, fval] = optimalTaskAllocator(0, 'random', [3 2 1]);
 ```
 By default, the print solution flag is set to false. To change that we need to specify it in the last parameter:
 ```
-[sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(0, 'random', [3 2 1], [], [1 1 0 0 0 0 0]);
+[sol, fval] = optimalTaskAllocator(0, 'random', [3 2 1], [], [1 1 0 0 0 0 0]);
 ```
 To solve a predefined scenario (for example scenario `1`), and moreover to do so with a variant of the formulation, we can run it like:
 ```
-[sol, fval, solving_time, dv_start_length] = optimalTaskAllocator(1, 'Test', [], [1 0 0 0], []);
+[sol, fval] = optimalTaskAllocator(1, 'Test', [], [1 0 0 0], []);
 ```
 
 ### Analyzing the solution
