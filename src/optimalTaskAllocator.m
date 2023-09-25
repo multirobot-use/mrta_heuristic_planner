@@ -132,7 +132,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     end
 
     % N == 0 are unspecified type tasks. They are treated as fragmentable tasks:
-    parfor t = 1:T
+    for t = 1:T
         if t ~= R
             if Task(t).N == 0
                 Task(t).Relayability = 0;
@@ -651,7 +651,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Relays allowed or not
     if not(relays_allowed_flag)
-        parfor t = 1:T
+        for t = 1:T
             if t ~= R
                 Task(t).Relayability = 0;
             end
@@ -660,7 +660,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Fragmentation allowed or not
     if not(fragmentation_allowed_flag)
-        parfor t = 1:T
+        for t = 1:T
             if t ~= R
                 Task(t).Fragmentability = 0;
             end
@@ -669,7 +669,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Variable or fixed number of robots
     if not(variable_number_of_robots_allowed_flag)
-        parfor t = 1:T
+        for t = 1:T
             if t ~= R
                 Task(t).N_hardness = 1;
                 if Task(t).N == 0
