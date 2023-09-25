@@ -277,21 +277,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         end
     end
 
-    %% Initialize parallel pool
-    if not(test_flag)
-        pool = gcp;
-        if isempty(pool)
-            error('No parallel pool found. Automatic pool start may be disabled.');
-        end
-
-        if display_flag
-            disp(strcat("Initialization time: ", num2str(toc), "s"));
-        end
-        if log_file_flag
-            fprintf(logFile, "Initialization time: %f s\n", toc);
-        end
-    end
-
     %% Decision Variables
     % -------------------------------------------------------------------------------------------------------------------------------------------------------------
     % z:                   (Real)    first part of the objective function (option 1). Minimize z with z >= tfin(a,S) for all a in A. i.e. tfin(a,S) - z <= 0.
@@ -554,9 +539,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % Put all decision variable starting positions and lengths together in a dictionary using the var names as keys and the starting positions as values:
     dv_start_length = containers.Map({'z', 'x_a_t_s', 'xx_a_t_t_s', 'V_t', 'U_t', 'n_t', 'na_t', 'nq_t', 'nq_a_t', 'nf_t', 'nf_t_nf', 'nfx_a_nf_t_s', 'naf_t_nf', 'nax_a_t_s', 'Ft_a_s', 'Ftx_a_s1', 'tfin_a_s', 'tfinx_a_t_s', 'd_tmax_tfin_a_s', 's_used', 'Td_a_s', 'Tw_a_s', 'Twx_a_s', 'Te_a_s','S_t_a1_s1_a2_s2', 'tfinS_t_a1_s1_a2_s2', 'R_t_a1_s1_a2_s2', 'tfinR_t_a1_s1_a2_s2', 'TeR_t_a1_s1_a2_s2'}, {[start_z length_z], [start_x_a_t_s length_x_a_t_s], [start_xx_a_t_t_s length_xx_a_t_t_s], [start_V_t length_V_t], [start_U_t length_U_t], [start_n_t length_n_t], [start_na_t length_na_t], [start_nq_t length_nq_t], [start_nq_a_t length_nq_a_t], [start_nf_t length_nf_t], [start_nf_t_nf length_nf_t_nf], [start_nfx_a_nf_t_s length_nfx_a_nf_t_s], [start_naf_t_nf length_naf_t_nf], [start_nax_a_t_s length_nax_a_t_s], [start_Ft_a_s length_Ft_a_s], [start_Ftx_a_s1 length_Ftx_a_s1], [start_tfin_a_s length_tfin_a_s], [start_tfinx_a_t_s length_tfinx_a_t_s], [start_d_tmax_tfin_a_s length_d_tmax_tfin_a_s], [start_s_used length_s_used], [start_Td_a_s length_Td_a_s], [start_Tw_a_s length_Tw_a_s], [start_Twx_a_s length_Twx_a_s], [start_Te_a_s length_Te_a_s], [start_S_t_a1_s1_a2_s2 length_S_t_a1_s1_a2_s2], [start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2], [start_R_t_a1_s1_a2_s2 length_R_t_a1_s1_a2_s2], [start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2], [start_TeR_t_a1_s1_a2_s2 length_TeR_t_a1_s1_a2_s2]});
 
-    %% Optimization
-    tic;
-
     % Objective function equations: memory is reserved for the maximum expected number of sparse elements
     A_double_sparse   = spalloc(max_ineq, length_dv, max_ineq_sparse_terms);
     b_double_sparse   = spalloc(max_ineq,         1, max_ineq_independent_sparse_terms);
@@ -691,7 +673,24 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'Ft_saf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
     end
 
+    %% Initialize parallel pool
+    if not(test_flag)
+        pool = gcp;
+        if isempty(pool)
+            error('No parallel pool found. Automatic pool start may be disabled.');
+        end
+
+        if display_flag
+            disp(strcat("Initialization time: ", num2str(toc), "s"));
+        end
+        if log_file_flag
+            fprintf(logFile, "Initialization time: %f s\n", toc);
+        end
+    end
+
     %% Equations and constraints
+    tic;
+
     % Objective function coefficients
     f = zeros(1,length_dv);
     switch objective_function
@@ -1321,100 +1320,100 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % R(t,a1,s1,a2,s2)*tfin_min - tfinR(t,a1,s1,a2,s2) <= 0
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 3*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_min;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 3*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 2*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_min;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 2*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
                                     % Add the new row and independent term to the corresponding matrix
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % tfinR(t,a1,s1,a2,s2) - R(t,a1,s1,a2,s2)*tfin_max <= 0
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 3*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 3*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
                                     % tfin(a1,s1) + tfin_max*R(t,a1,s1,a2,s2) - tfinR(t,a1,s1,a2,s2) <= tfin_max
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) =  tfin_max;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
-                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) =  tfin_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
+                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
                                     % tfinR(t,a1,s1,a2,s2) - tfin(a1,s1) - tfin_min*R(t,a1,s1,a2,s2) <= - tfin_min
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) = -1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
-                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) = -1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
+                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
 
                                     % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % R(t,a1,s1,a2,s2)*tfin_min - tfinR(2,t,a1,s1,a2,s2) <= 0
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 7*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_min;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 7*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_min;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % tfinR(2,t,a1,s1,a2,s2) - R(t,a1,s1,a2,s2)*tfin_max <= 0
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 7*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 7*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
                                     % tfin(a2,s2) + tfin_max*R(t,a1,s1,a2,s2) - tfinR(2,t,a1,s1,a2,s2) <= tfin_max
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
-                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
+                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
                                     % tfinR(2,t,a1,s1,a2,s2) - tfin(a2,s2) - tfin_min*R(t,a1,s1,a2,s2) <= - tfin_min
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) = -1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
-                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) = -1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
+                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
                                     
                                     % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % R(t,a1,s1,a2,s2)*Te_min - TeR(t,a1,s1,a2,s2) <= 0
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 11*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = Te_min;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 11*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = -1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = Te_min;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % TeR(t,a1,s1,a2,s2) - R(t,a1,s1,a2,s2)*Te_max <= 0
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - Te_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 11*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 11*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - Te_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
                                     % Te(a2,s2) + Te_max*R(t,a1,s1,a2,s2) - TeR(t,a1,s1,a2,s2) <= Te_max
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_Te_a_s - 1) + (a2 + (s2 - 1)*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = Te_max;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = -1;
-                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = Te_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_Te_a_s - 1) + (a2 + (s2 - 1)*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = Te_max;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = -1;
+                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = Te_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
                                     % TeR(t,a1,s1,a2,s2) - Te(a2,s2) - Te_min*R(t,a1,s1,a2,s2) <= - Te_min
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 14*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 14*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_Te_a_s - 1) + (a2 + (s2 - 1)*A)) = -1;
-                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 14*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - Te_min;
-                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 14*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - Te_min;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_Te_a_s - 1) + (a2 + (s2 - 1)*A)) = -1;
+                                    A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - Te_min;
+                                    b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - Te_min;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
                                 end
