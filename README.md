@@ -57,7 +57,7 @@ By default, the print solution flag is set to false. To change that we need to s
 ```
 If the scenario is feasible, we would see the optimal solution displayed in a bar plot like this:
 
-![randomSolution]()
+![random3x2](https://github.com/multirobot-use/task_planner/assets/74324102/cc9a8771-5bb3-42b3-a7db-ae48c7c4df03)
 
 Note that the bar for each task is divided into two parts. The upper part represents the total duration of the task. We can see that the task name/id appears above it. The length of the lower part represents what part of task time corresponds to the travel time, waiting time and execution time.
 
