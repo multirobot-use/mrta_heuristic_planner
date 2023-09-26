@@ -160,7 +160,7 @@ Last, we need to call the `checkSolution()` function:
 
 We should see the solution in a bar plot like the following one:
 
-![manualSolution](https://drive.google.com/file/d/1XI1nJN5wktXhgxTUEvnDyJyZkUZZJAmG/view?usp=sharing)
+![scenario5](https://github.com/multirobot-use/task_planner/assets/74324102/8c906833-db7f-49fa-91f6-fcf2c05176f7)
 
 To check a solution obtained with the solver we use the same command but changing `xats_nf_S_R` by `sol`:
 Last, we need to call the `checkSolution()` function:
