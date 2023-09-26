@@ -160,7 +160,7 @@ Last, we need to call the `checkSolution()` function:
 
 We should see the solution in a bar plot like the following one:
 
-![manualSolution](https://drive.google.com/file/d/1cMNXcFadar6Gl4wLamthRKWM4cH0uChU/view?usp=drive_link)
+![manualSolution](https://drive.google.com/file/d/1XI1nJN5wktXhgxTUEvnDyJyZkUZZJAmG/view?usp=sharing)
 
 To check a solution obtained with the solver we use the same command but changing `xats_nf_S_R` by `sol`:
 Last, we need to call the `checkSolution()` function:
