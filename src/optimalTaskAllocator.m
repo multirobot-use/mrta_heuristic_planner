@@ -110,8 +110,8 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     end
 
     % N == 0 are unspecified type tasks. They are treated as fragmentable tasks:
-    for t = 1:T
-        if t ~= R
+    for t = 1:length(Task)
+        if not(strcmp(Task(t).name, 't_R'))
             if Task(t).N == 0
                 Task(t).Relayability = 0;
                 Task(t).Fragmentability = 1;
