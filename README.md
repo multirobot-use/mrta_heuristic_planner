@@ -155,7 +155,7 @@ Note that `xats` is the task allocation itself. `x(a,t,s) = 1` if task `t` is as
 
 Last, we need to call the `checkSolution()` function:
 ```
-[dv_chk, fval_chk, result_chk] = checkSolution(xats_nf_S_R, A, N, T, S, dv_start_length, Task, Agent, Td_a_t_t, Te_t_nf, Ft_saf, H_a_t, 'tmp', 1, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max);
+[dv_chk, fval_chk, result_chk] = checkSolution(xats_nf_S_R, dv_start_length, Agent, Task, Ft_saf, 'tmp', 1, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max);
 ```
 
 We should see the solution in a bar plot like the following one:
@@ -165,7 +165,7 @@ We should see the solution in a bar plot like the following one:
 To check a solution obtained with the solver we use the same command but changing `xats_nf_S_R` by `sol`:
 Last, we need to call the `checkSolution()` function:
 ```
-[dv_chk, fval_chk, result_chk] = checkSolution(sol, A, N, T, S, dv_start_length, Task, Agent, Td_a_t_t, Te_t_nf, Ft_saf, H_a_t, 'tmp', 1, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max);
+[dv_chk, fval_chk, result_chk] = checkSolution(sol, dv_start_length, Agent, Task, Ft_saf, 'tmp', 1, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max);
 ```
 
 **Note** that there may be more that one optimal solution, and as a consequence of that, the showed solution may be an equivalent solution to the one founded by the solver. Mainly, the tasks where the coordination waiting times are applied may change.

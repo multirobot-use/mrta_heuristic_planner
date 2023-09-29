@@ -1,8 +1,11 @@
 %% Function to check if a handmade matrix solution is correct
 %! ----------------------------------------------------------
-function [dv, fval, result] = checkSolution(sol, A, N, T, S, dv_start_length, Task, Agent, Td_a_t_t, Te_t_nf, Ft_saf, H_a_t, execution_id, objective_function, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max, print_coord_steps_flag)
+function [dv, fval, result] = checkSolution(sol, dv_start_length, Agent, Task, Ft_saf, execution_id, objective_function, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max, print_coord_steps_flag)
     % Numerical tolerance
     tol = 1e-6;
+
+    % Get scenario information
+    [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
     %% Get all dv start and length information
     [start_z                   length_z                   ...
