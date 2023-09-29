@@ -1,5 +1,5 @@
 %% Function to switch between handmade pre-defined scenarios or random generated scenarios with some constraints
-function [Agent, Task, A, N, T, S, R, Td_a_t_t, Te_t_nf] = scenario(A, T, types)
+function [Agent, Task] = scenario(A, T, types)
     % Randomly generated scenario: A robots, T Tasks (without counting the recharge task), "types" different types of robots
     % In case we call thi function using a single input argument, A becomes the "predefined" scenario to select
     % Note: from the third to the last output variables are needed to print the solution after solving. 
@@ -67,8 +67,8 @@ function [Agent, Task, A, N, T, S, R, Td_a_t_t, Te_t_nf] = scenario(A, T, types)
 
                 % Generate N (number of required agents, 0 if not specified). Note that (N = 0) == (N = 1 Fragmentable)
                 max_N = sum(ismember([Agent.type], Hr));
-                %N = randi([0 max_N]);
-                N = randi([0 1])*max_N;
+                N = randi([0 max_N]);
+                %N = randi([0 1])*max_N;
 
                 % Generate N-hardness, Relayability and Fragmentability parameters
                 if N == 0
@@ -294,8 +294,8 @@ function [Agent, Task, A, N, T, S, R, Td_a_t_t, Te_t_nf] = scenario(A, T, types)
                     Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 7*60,  'Ft_0', 0*60, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
                     Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                    Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                    Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                    Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                    Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 3, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
                 elseif predefined == 18
                     % Scenario 18: 5 Agents (5 type 1), 3 Tasks (Recharge, Task_1, Task_2)
                     % Test fragmentable tasks with specified N.
@@ -350,6 +350,16 @@ function [Agent, Task, A, N, T, S, R, Td_a_t_t, Te_t_nf] = scenario(A, T, types)
 
                     Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
                     Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                elseif predefined == 24
+                    % Scenario 24: 3 Agents (3 type 1), 4 Tasks (Recharge, Task_1, Task_2, Task_3)
+                    Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 10*60, 'Ft_0', 0*60, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
+                    Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 25*60, 'Ft_0', 0*60, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
+                    Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 30*60, 'Ft_0', 5*60, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
+
+                    Task(1)  = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                    Task(2)  = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 45*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                    Task(3)  = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                    Task(4)  = struct('name', 't_3', 'Hr', [1], 'Te', 20*60, 'tmax', 60*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -6,  'y',  10, 'z', 2), 'color', [0.93 0.69 0.13]);
                 else
                     % Default scenario: 2 Agents (1 type 1, 1 type 2), 6 Tasks (Recharge, Task_1, Task_2, Task_3, Task_4, Task_5)
                     Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 5*60, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
@@ -361,74 +371,4 @@ function [Agent, Task, A, N, T, S, R, Td_a_t_t, Te_t_nf] = scenario(A, T, types)
                 end
             end
     end
-
-    % Compute the rest of the output variables, needed to print the solution A, N, T, S, Td_a_t_t, Te_t_nf
-    % Note: this parametes are computed only to use them in printSolution(). They are overwitten in optimalTaskAllocation() function
-    A = length(Agent);
-    T = length(Task);
-
-    % Index of the Recharge task
-    for t = 1:T
-        if strcmp(Task(t).name, 't_R')
-            R = t;
-            break;
-        end
-    end
-
-    % Calculate Td(t1,t2) matrix
-    % Due to initial positions, Td(t1,t2) will depend also on the agent. So it's renamed as Td(a,t1,t2)
-    Td_a_t_t = zeros(A,T,T+1);
-    for a = 1:A
-        for t = 1:T
-            for t2 = 0:T
-                if t2 == 0
-                    Td_a_t_t(a,t,t2 + 1) = norm([Task(t).wp.x, Task(t).wp.y, Task(t).wp.z] - [Agent(a).P0.x, Agent(a).P0.y, Agent(a).P0.z])/Agent(a).ts;
-                else
-                    Td_a_t_t(a,t,t2 + 1) = norm([Task(t).wp.x, Task(t).wp.y, Task(t).wp.z] - [Task(t2).wp.x, Task(t2).wp.y, Task(t2).wp.z])/Agent(a).ts;
-                end
-            end
-        end
-    end
-
-    % Get maximum an minimum values from Agents and Tasks
-    Task_Te = [Task.Te];
-    Te_max = max(Task_Te);
-    Td_max = max(max(max(Td_a_t_t)));
-    Fl_max = max([Task.Fl]);
-    Ft_min = min([Agent.Ft]);
-
-    % Estimate the upper bound for N (number of agents needed to execute simultaneously a task, or number of fragments a task is divided into)
-    N = max([max([max([Task.N]), ceil((1 + Fl_max / 100) * (Te_max + Td_max) / Ft_min)]), A]) + 1;
-
-    % Calculate Te(t,nf) matrix
-    Te_t_nf = ones(T,N);
-    Te_t_nf(R,:) = Te_t_nf(R,:) * Task(R).Te;
-    for t = 1:T
-        if t ~= R
-            Te_t_nf(t,1) = Task(t).Te;
-            for nf = 2:N
-                % Fragmentable tasks have fragmentation loses
-                if Task(t).Fragmentability == 1
-                    Te_t_nf(t,nf) = Task(t).Te * (1 / nf + Task(t).Fl / 100);
-                % Non-fragmentable tasks don't have fragmentation loses when divided if allowed
-                else
-                    Te_t_nf(t,nf) = Task(t).Te / nf;
-                end
-            end
-        end
-    end
-
-    % The maximum possible slots to be needed is 2*(T-1)*max(nf). As relays are allowed, tasks may be assigned to more than a single Agent and more than once. Also, a recharge may be needed before each task. However, sometimes a smaller value for S could be set safely.
-    % A slightly more realistic value for S would be 2*sum from t = 2 to T of (nf(t))
-    % nf(t) can be estimated as ceil((max(Td(t) + Te(t)*(1+Task(t).Fl)) / min(Ft(a)|Hr))
-    % To simplify, est_nf(t) = ceil((Td_max + Te(t) * (1 + Task(t).Fl)) / min(Ft(a)*ismember([Agent.type], Task(t).Hr)))
-    S = 0;
-    est_nf = 0;
-    for t = 1:T
-        if t ~= R
-            est_nf = ceil((Td_max + Te_t_nf(t,1) * (1 + Task(t).Fl/100)) / min(nonzeros([Agent.Ft].*ismember([Agent.type], Task(t).Hr))));
-            S = S + est_nf;
-        end
-    end
-    S = 2 * S;
 end

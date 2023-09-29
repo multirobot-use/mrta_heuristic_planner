@@ -309,7 +309,7 @@ function [dv, fval, result] = checkSolution(sol, A, N, T, S, dv_start_length, Ta
 
         iteration_idx = iteration_idx + 1;
         if nargin > 20 && print_coord_steps_flag
-            printSolution(dv, 0, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv_start_length, strcat('Coordination_Iteration_', num2str(iteration_idx)), objective_function, 0);
+            printSolution(dv, 0, Agent, Task, dv_start_length, strcat('Coordination_Iteration_', num2str(iteration_idx)), objective_function, 0);
         end
 
         %% Search the first slot to be coordinated from the remaining ones
@@ -657,7 +657,7 @@ function [dv, fval, result] = checkSolution(sol, A, N, T, S, dv_start_length, Ta
     end
 
     %% Print solution
-    printSolution(dv, fval, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv_start_length, execution_id, objective_function, 0);
+    printSolution(dv, fval, Agent, Task, dv_start_length, execution_id, objective_function, 0);
 end
 
 %% Get start and length variable information

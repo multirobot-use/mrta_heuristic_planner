@@ -1,7 +1,10 @@
 %% Print solution
-function printSolution(sol, fval, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv_start_length, execution_id, objective_function, predefined)
+function printSolution(sol, fval, Agent, Task, dv_start_length, execution_id, objective_function, predefined)
     if not(isempty(sol))
         tol = 1e-6;
+
+        % Get scenario information
+        [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
         % Extract necessary decision variables values from solution vector
         % Extract x_a_t_s and reshape back solution vector to matrix x(start_x_a_t_s : start_x_a_t_s + length_x_a_t_s - 1) -> x(a,t,s)
@@ -22,20 +25,11 @@ function printSolution(sol, fval, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv
         length_nf_t_nf = start_length(2);
         nf_t_nf = reshape(sol(start_nf_t_nf : start_nf_t_nf + length_nf_t_nf - 1), T, N);
 
-        % Compute Td(a,s)
-        % Td(a,s) = sum from t = 1 to T of ((sum from t2 = 0 to T of (Td_a(t,t2) * xa(t2,s-1))) * xa(t,s)), for all a = 1 to A and s = 1 to S
-        Td = zeros(A,S);
-        for a = 1:A
-            for s = 1:S
-                for t = 1:T
-                    aux_Td_t2 = 0;
-                    for t2 = 0:T
-                        aux_Td_t2 = aux_Td_t2 + Td_a_t_t(a,t,(t2 + 1)) * x_a_t_s(a,(t2 + 1),((s-1) + 1));
-                    end
-                    Td(a,s) = Td(a,s) + aux_Td_t2 * x_a_t_s(a,(t + 1),(s + 1));
-                end
-            end
-        end
+        % Extract Td_a_s and reshape back solution vector to matrix Td_a_s(start_Td_a_s : start_Td_a_s + length_Td_a_s - 1) -> Td(a,s)
+        start_length = dv_start_length('Td_a_s');
+        start_Td_a_s = start_length(1);
+        length_Td_a_s = start_length(2);
+        Td = reshape(sol(start_Td_a_s : start_Td_a_s + length_Td_a_s - 1), A, S);
 
         % Extract Tw_a_s and reshape back solution vector to matrix Tw_a_s(start_Tw_a_s : start_Tw_a_s + length_Tw_a_s - 1) -> Tw(a,s)
         start_length = dv_start_length('Tw_a_s');
@@ -43,20 +37,11 @@ function printSolution(sol, fval, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv
         length_Tw_a_s = start_length(2);
         Tw = reshape(sol(start_Tw_a_s : start_Tw_a_s + length_Tw_a_s - 1), A, S);
 
-        % Compute Te(a,s)
-        % Te(a,s) = sum from t = 1 to T of ((sum from nf = 1 to N of (Te(t,nf) * nf(t,nf))) * xa(t,s)), for all a = 1 to A and s = 1 to S
-        Te = zeros(A,S);
-        for a = 1:A
-            for s = 1:S
-                for t = 1:T
-                    aux_Te_nf = 0;
-                    for nf = 1:N
-                        aux_Te_nf = aux_Te_nf + Te_t_nf(t,nf) * nf_t_nf(t,nf);
-                    end
-                    Te(a,s) = Te(a,s) + aux_Te_nf * x_a_t_s(a,(t + 1),(s + 1));
-                end
-            end
-        end
+        % Extract Te_a_s and reshape back solution vector to matrix Te_a_s(start_Te_a_s : start_Te_a_s + length_Te_a_s - 1) -> Te(a,s)
+        start_length = dv_start_length('Te_a_s');
+        start_Te_a_s = start_length(1);
+        length_Te_a_s = start_length(2);
+        Te = reshape(sol(start_Te_a_s : start_Te_a_s + length_Te_a_s - 1), A, S);
 
         % Open a new figure
         figure();
@@ -113,6 +98,10 @@ function printSolution(sol, fval, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv
         % Set axis labels
         xlabel('Time (s)', 'FontSize', 16);
         ylabel('Robot','FontSize', 16);
+        if objective_function < 2
+            xticks('auto');
+            xlim([0 sol(1)]);
+        end
         yticks([1:A]);
         ylim([0.5 A+0.5]);
 

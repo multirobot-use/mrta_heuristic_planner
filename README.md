@@ -5,7 +5,7 @@ number of tasks that may have different specifications and types, while dealing 
 recovered by executing certain actions, i.e. the robots have limited battery power, but have the possibility to plan
 recharges.
 
-The objective is to find a mission plan, i.e. to assign all tasks to the agents needed to complete them successfully respecting the constraints imposed by each task, while minimizing the total execution time, i.e. the makespan.
+The objective is to find a mission plan, i.e. to assign all tasks to the robots (also called agents) needed to complete them successfully respecting the constraints imposed by each task, while minimizing the total execution time, i.e. the makespan.
 
 The problem is formulated using Mixed Integer Linear Programming (MILP) in Matlab. To solve it, the `intlinprog()`
 Matlab function is called. If you have Gurobi installed in Matlab, this function should be overwritten by the
@@ -20,7 +20,7 @@ Robots are mainly characterized by their type. Tasks have a list of robot types 
 
 To understand the wide variety of tasks that are contemplated within the problem, we talk about two characteristics of the tasks: composability and number of robots. Depending on the composability, tasks can be non-decomposable, relayable or fragmentable. Non-composable tasks must be executed continuously by the same robots, relayable tasks must be executed continuously, but allow relays between several robots, and finally, fragmentable tasks can be executed in fragments that do not have to be coordinated between them and can be spread over the schedule of one or several robots. On the other hand, tasks can have a fixed number of robots, i.e. they need to be executed by exactly the specified number of robots, they can have a variable number of robots, meaning that they specify an ideal number of robots with which to be executed, but allow a different number of robots to be used, or they can specify no number of robots at all, and their duration will depend on the number of robots finally employed to execute them. Tasks can belong to any type that is a combination of these two characteristics.
 
-In the [scenario](scripts/scenario.m) script you can see in more detail how agents and tasks are implemented within the formulation.
+In the [scenario](scripts/scenario.m) script you can see in more detail how agents (robots) and tasks are implemented within the formulation.
 
 ## Installation
 There are no special requirements to be able to run the formulation Matlab script.
@@ -89,7 +89,7 @@ The names of the variables can be consulted in both [optimalTaskAllocator.m](src
 
 In case that we forgot to print the solution, we can also print it manually after loading the planner workspace information doing:
 ```
-printSolution(sol, fval, Agent, Task, A, N, T, S, Td_a_t_t, Te_t_nf, dv_start_length, 'scenario_id', objective_function, predefined);
+printSolution(sol, fval, Agent, Task, dv_start_length, 'scenario_id', objective_function, predefined);
 ```
 
 ## Check solution
@@ -97,7 +97,7 @@ There also available a script, [checkSolution.m](scripts/checkSolution.m), that 
 
 To see an example, lets say we want to check if a handmade solution for the predefined scenario number `5` is valid or not. The first step would be to load into the workspace the scenario information:
 ```
-[sol, fval] = sparseXATS(5, 'checkSolutionTest', [], [], [0, 0, 0, 0, 0, 1, 0]);
+[sol, fval] = optimalTaskAllocator(5, 'checkSolutionTest', [], [], [0, 0, 0, 0, 0, 1, 0]);
 load('../mat/planner_workspace.mat');
 ```
 
