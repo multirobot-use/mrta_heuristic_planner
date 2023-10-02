@@ -73,7 +73,7 @@ function printSolution(sol, fval, Agent, Task, dv_start_length, execution_id, ob
             % Plot a's queue
             if not(isempty(slot_duration))
                 gantt = barh(a, slot_duration, barWidth,'stacked', 'LineWidth', 1.5);
-                times = barh(a - 0.2, slot_phase_duration, barWidth/2,'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0);
+                times = barh(a - barWidth/4, slot_phase_duration, barWidth/2,'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0);
 
                 % Change tasks colors and add task name
                 for s = 1:S

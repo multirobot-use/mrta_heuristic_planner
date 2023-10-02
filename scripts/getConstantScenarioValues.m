@@ -19,6 +19,27 @@ function [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(A
         end
     end
 
+    % Compute the minimum safety flight time for each robot depending on its traveling speed and the distance to the recharge station
+    % Maximum distance to the recharge station from any task waypoint
+    max_dist = 0;
+    for t = 1:T
+        if t ~= R
+            dist = norm([Task(t).wp.x, Task(t).wp.y, Task(t).wp.z] - [Task(R).wp.x, Task(R).wp.y, Task(R).wp.z]);
+            if dist > max_dist
+                max_dist = dist;
+            end
+        end
+    end
+    % Safety flight time for each robot depending on its traveling speed and its distance to the recharge station
+    for a = 1:A
+        dist = norm([Agent(a).P0.x, Agent(a).P0.y, Agent(a).P0.z] - [Task(R).wp.x, Task(R).wp.y, Task(R).wp.z]);
+        if dist > max_dist
+            Agent(a).Ft_saf = dist / Agent(a).ts;
+        else
+            Agent(a).Ft_saf = max_dist / Agent(a).ts;
+        end
+    end
+
     % Calculate Td(t1,t2) matrix
     % Due to initial positions, Td(t1,t2) will depend also on the agent. So it's renamed as Td(a,t1,t2)
     Td_a_t_t = zeros(A,T,T+1);
@@ -34,15 +55,8 @@ function [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(A
         end
     end
 
-    % Get maximum an minimum values from Agents and Tasks
-    Task_Te = [Task.Te];
-    Te_max = max(Task_Te);
-    Td_max = max(max(max(Td_a_t_t)));
-    Fl_max = max([Task.Fl]);
-    Ft_min = min([Agent.Ft]);
-
-    % Estimate the upper bound for N (number of agents needed to execute simultaneously a task, or number of fragments a task is divided into)
-    N = max([max([max([Task.N]), ceil((1 + Fl_max / 100) * (Te_max + Td_max) / Ft_min)]), A]) + 1;
+    % Estimate the upper bound for the number of fragments a task is divided into
+    N = 2 + ceil((max([Task.Te]) * (1 + max([Task.Fl]) / 100)) / (min([Agent.Ft]) - max([Agent.Ft_saf]) - max(max(max(Td_a_t_t)))));
 
     % Calculate Te(t,nf) matrix
     Te_t_nf = ones(T,N);
@@ -64,13 +78,13 @@ function [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(A
 
     % The maximum possible slots to be needed is 2*(T-1)*max(nf). As relays are allowed, tasks may be assigned to more than a single Agent and more than once. Also, a recharge may be needed before each task. However, sometimes a smaller value for S could be set safely.
     % A slightly more realistic value for S would be 2*sum from t = 2 to T of (nf(t))
-    % nf(t) can be estimated as ceil((max(Td(t) + Te(t)*(1+Task(t).Fl)) / min(Ft(a)|Hr))
-    % To simplify, est_nf(t) = ceil((Td_max + Te(t) * (1 + Task(t).Fl)) / min(Ft(a)*ismember([Agent.type], Task(t).Hr)))
+    % nf(t) can be estimated as ceil((max(Td(t) + Te(t)*(1 + Task(t).Fl)) / min((Ft(a) - Ft_saf(a))|Hr))
+    % To simplify, est_nf(t) = ceil((Td_max + Te(t) * (1 + Task(t).Fl)) / min((Ft(a) - Ft_saf(a))*ismember([Agent.type], Task(t).Hr)))
     S = 0;
     est_nf = 0;
     for t = 1:T
         if t ~= R
-            est_nf = ceil((Td_max + Te_t_nf(t,1) * (1 + Task(t).Fl/100)) / min(nonzeros([Agent.Ft].*ismember([Agent.type], Task(t).Hr))));
+            est_nf = ceil((max(max(max(Td_a_t_t))) + Te_t_nf(t,1) * (1 + Task(t).Fl/100)) / min(nonzeros(([Agent.Ft] - [Agent.Ft_saf]).*ismember([Agent.type], Task(t).Hr))));
             S = S + est_nf;
         end
     end

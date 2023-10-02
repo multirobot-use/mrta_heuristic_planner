@@ -1,6 +1,6 @@
 %% Function to check if a handmade matrix solution is correct
 %! ----------------------------------------------------------
-function [dv, fval, result] = checkSolution(sol, dv_start_length, Agent, Task, Ft_saf, execution_id, objective_function, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max, print_coord_steps_flag)
+function [dv, fval, result] = checkSolution(sol, dv_start_length, Agent, Task, execution_id, objective_function, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max, print_coord_steps_flag)
     % Numerical tolerance
     tol = 1e-6;
 
@@ -381,10 +381,10 @@ function [dv, fval, result] = checkSolution(sol, dv_start_length, Agent, Task, F
 
     %* Depends on: Ft_a_s
     % Flight time constraint
-    % Ft_a(s) <= Ft_a - Ft_saf, for all a = 1 to A and s = 1 to S
+    % Ft_a(s) <= Ft_a - Ft_saf_a, for all a = 1 to A and s = 1 to S
     for a = 1:A
         for s = 1:S
-            if not(dv((start_Ft_a_s - 1) + (a + ((s + 1) - 1)*A)) <= (Agent(a).Ft - Ft_saf) + tol)
+            if not(dv((start_Ft_a_s - 1) + (a + ((s + 1) - 1)*A)) <= (Agent(a).Ft - Agent(a).Ft_saf) + tol)
                 disp(strcat('Flight time constraint not met for agent a = ', num2str(a), ' and s = ', num2str(s)));
                 result = false;
             end
@@ -607,21 +607,23 @@ function [dv, fval, result] = checkSolution(sol, dv_start_length, Agent, Task, F
     % nr(t) = n(t) - na(t), for all t = 2 to T
     for t = 1:T
         if t ~= R
-            R_t = 0;
-            for a1 = 1:A
-                for s1 = 1:S
-                    for a2 = 1:A
-                        for s2 = 1:S
-                            if not(a1 == a2 && s1 == s2)
-                                R_t = R_t + dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+            if Task(t).Relayability == 1
+                R_t = 0;
+                for a1 = 1:A
+                    for s1 = 1:S
+                        for a2 = 1:A
+                            for s2 = 1:S
+                                if not(a1 == a2 && s1 == s2)
+                                    R_t = R_t + dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                end
                             end
                         end
                     end
                 end
-            end
-            if not (abs(R_t - (dv((start_n_t - 1) + t) - dv((start_na_t - 1) + t))) < tol)
-                disp(strcat('Incorrect number of relays for t = ', num2str(t)));
-                result = false;
+                if not (abs(R_t - (dv((start_n_t - 1) + t) - dv((start_na_t - 1) + t))) < tol)
+                    disp(strcat('Incorrect number of relays for t = ', num2str(t)));
+                    result = false;
+                end
             end
         end
     end

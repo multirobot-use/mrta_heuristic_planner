@@ -119,9 +119,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         end
     end
 
-    % Safety minimum flight time (s)
-    Ft_saf = 1*60;
-
     % Get constant scenario information values
     [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
@@ -130,9 +127,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     Task_Te = [Task.Te];
     Te_min = 0;
     Te_max = max(Task_Te);
-    Td_max = max(max(max(Td_a_t_t)));
-    Fl_max = max([Task.Fl]);
-    Ft_min = min([Agent.Ft]);
 
     % z is normalized by scaling its value between the theoretical maximum and minimum value for the total execution time.
     % The minimum value is not 0, but for simplicity, it will be considered as 0.
@@ -197,7 +191,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Minimum and maximum task flight time. Needed for later linearizations.
     Ft_min_a = 0;
-    Ft_max_a = max([Agent.Ft] - Ft_saf);
+    Ft_max_a = max([Agent.Ft] - [Agent.Ft_saf]);
 
     %% Decision Variables
     % -------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -521,7 +515,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     ub(start_nq_a_t          : start_nq_a_t          + length_nq_a_t          - 1) = 1;
     ub(start_nf_t_nf         : start_nf_t_nf         + length_nf_t_nf         - 1) = 1;
     ub(start_nfx_a_nf_t_s    : start_nfx_a_nf_t_s    + length_nfx_a_nf_t_s    - 1) = 1;
-    ub(start_Ftx_a_s1        : start_Ftx_a_s1        + length_Ftx_a_s1        - 1) = repmat([Agent.Ft] - Ft_saf, 1, S)';
+    ub(start_Ftx_a_s1        : start_Ftx_a_s1        + length_Ftx_a_s1        - 1) = repmat([Agent.Ft] - [Agent.Ft_saf], 1, S)';
     ub(start_S_t_a1_s1_a2_s2 : start_S_t_a1_s1_a2_s2 + length_S_t_a1_s1_a2_s2 - 1) = 1;
     ub(start_R_t_a1_s1_a2_s2 : start_R_t_a1_s1_a2_s2 + length_R_t_a1_s1_a2_s2 - 1) = 1;
 
@@ -587,12 +581,12 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         sol = [];
         fval = 0;
         solving_time = 0;
-        save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'Ft_saf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
+        save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
         return;
     end
 
     if save_flag
-        save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'Ft_saf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
+        save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
     end
 
     %% Initialize parallel pool
@@ -902,14 +896,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     end
 
     %% Flight time constraint
-    % Ft(a,s) <= Ft(a) - Ft_saf, for all a = 1 to A and s = 1 to S
+    % Ft(a,s) <= Ft(a) - Ft_saf(a), for all a = 1 to A and s = 1 to S
     parfor a = 1:A
         for s = 1:S
             A_tmp = spalloc(max_ineq, length_dv, 1);
             b_tmp = spalloc(max_ineq, 1, 1);
-            % Ft(a,s) <= Ft_a - Ft_saf
+            % Ft(a,s) <= Ft_a - Ft_saf_a
             A_tmp((start_Ft_a_s_ineq - 1) + (a + (s - 1)*A), (start_Ft_a_s - 1) + (a + ((s + 1) - 1)*A)) = 1;
-            b_tmp((start_Ft_a_s_ineq - 1) + (a + (s - 1)*A)) = Agent(a).Ft - Ft_saf;
+            b_tmp((start_Ft_a_s_ineq - 1) + (a + (s - 1)*A)) = Agent(a).Ft - Agent(a).Ft_saf;
             % Add the new row and independent term to the corresponding matrix
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
