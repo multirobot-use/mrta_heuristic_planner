@@ -1,15 +1,10 @@
 # Optimal Task Allocation for Heterogeneous Multi-robot Teams with Battery Constraints
 ## Overview
-This repository deals with optimal task planning missions with heterogeneous teams of robots that will have to execute a
-number of tasks that may have different specifications and types, while dealing with limited resources that can be
-recovered by executing certain actions, i.e. the robots have limited battery power, but have the possibility to plan
-recharges.
+This repository deals with optimal task planning missions with heterogeneous teams of robots that will have to execute a number of tasks that may have different specifications and types, while dealing with limited resources that can be recovered by executing certain actions, i.e. the robots have limited battery power, but have the possibility to plan recharges.
 
 The objective is to find a mission plan, i.e. to assign all tasks to the robots (also called agents) needed to complete them successfully respecting the constraints imposed by each task, while minimizing the total execution time, i.e. the makespan.
 
-The problem is formulated using Mixed Integer Linear Programming (MILP) in Matlab. To solve it, the `intlinprog()`
-Matlab function is called. If you have Gurobi installed in Matlab, this function should be overwritten by the
-`intlinprog()` Gurobi function, so the same code works using Matlab or Gurobi solvers.
+The problem is formulated using Mixed Integer Linear Programming (MILP) in Matlab. To solve it, the `intlinprog()` Matlab function is called. If you have Gurobi installed in Matlab, this function should be overwritten by the `intlinprog()` Gurobi function, so the same code works using Matlab or Gurobi solvers.
 
 ## Problem description
 The proposed problem constitutes a first step towards the formulation and analysis of a problem of complexity never before addressed in the state of the art.
@@ -67,29 +62,27 @@ To solve a predefined scenario (for example scenario `1`), and moreover to do so
 ```
 
 ### Analyzing the solution
-After running the `optimalTaskAllocator()` function, we can check the values of some variables of the solution vector using the [getVarValue](scripts/getVarValue.m) script. To do so, we first need to load the information about the scenario that has just been solved.
-If we had the save flag on when we solved it, there should be a `planner_workspace.mat` file in the `mat` folder corresponding to the variables from the `optimalTaskAllocator()` function that we need to properly analyze the solution. If we forgot to turned it on, we can just call the planner again with the test flag on specifying to solve the last scenario. This will just save the workspace information and return. Then to load the information we just run the following:
+After running the `optimalTaskAllocator()` function, we can check the values of some variables of the solution vector using the [getVarValue](scripts/getVarValue.m) script. To do so, we first need to load the information about the scenario that has just been solved:
 
 **Note**: if it was a randomly generated scenario, remember to set the save flag on before when calling the main function.
 ```
-load('../mat/planner_workspace.mat');
+[Agent, Task] = scenario(scenario_id);
 ```
 Where `scenario_id` is the id of the scenario just solved.
 
-Now the `Agent` and `Task` structures with the scenario information are loaded. We can see also `A`, that is the number of
-robots, `T`, the number of tasks including the Recharge task, `S`, the length of the robot's queue, `N`, maximum estimated number of fragments, `Td_a_t_t` is a `A`x`T`x`T+1` array, `Td_a_t_t(a, t2, t1)` would be the time it takes for robot `a` to move from task `t1`location to task `t2` location, and `Te_t_nf` is a `T`x`N` array, where `Te_t_nf(t,nf)` would be the time it takes for task `t` to execute if it where divided into `nf` fragments. `dv_start_length` is a structure containing the starting position and length of each decision variable in the solution vector (`sol`).
+Now the `Agent` and `Task` structures with the scenario information are loaded.
 
-With this information and the information returned by the `optimalTaskAllocator()`, we can call `getVarValue()` to check the value of any decision variable that we want. To check for example how mane fragments are tasks being divided into:
+With this information and the solution vector returned by the `optimalTaskAllocator()`, we can call `getVarValue()` to check the value of any decision variable that we want. To check for example how mane fragments are tasks being divided into:
 ```
-nf_t = getVarValue(display_flag, sol, A, N, T, S, dv_start_length, 'nf_t')
+nf_t = getVarValue(sol, Agent, Task, 'nf_t')
 ```
-**Note**: on of the tasks will be the recharge task, usually the first task.
+**Note**: one of the tasks will be the recharge task, usually the first task.
 
-The names of the variables can be consulted in both [optimalTaskAllocator.m](src/optimalTaskAllocator.m) and [getVarValue](scripts/getVarValue.m) source codes.
+The names of the variables can be consulted in the [getVarValue](scripts/getVarValue.m) source code.
 
 In case that we forgot to print the solution, we can also print it manually after loading the planner workspace information doing:
 ```
-printSolution(sol, fval, Agent, Task, dv_start_length, 'scenario_id', objective_function, predefined);
+printSolution(sol, Agent, Task, 'scenario_id', 'execution_id', fval);
 ```
 
 ## Check solution
@@ -97,8 +90,8 @@ There also available a script, [checkSolution.m](scripts/checkSolution.m), that 
 
 To see an example, lets say we want to check if a handmade solution for the predefined scenario number `5` is valid or not. The first step would be to load into the workspace the scenario information:
 ```
-[sol, fval] = optimalTaskAllocator(5, 'checkSolutionTest', [], [], [0, 0, 0, 0, 0, 1, 0]);
-load('../mat/planner_workspace.mat');
+[Agent, Task] = scenario(5);
+[A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 ```
 
 Then we need to build the solution itself and put the main decision variables into a vector:
@@ -155,7 +148,7 @@ Note that `xats` is the task allocation itself. `x(a,t,s) = 1` if task `t` is as
 
 Last, we need to call the `checkSolution()` function:
 ```
-[dv_chk, fval_chk, result_chk] = checkSolution(xats_nf_S_R, dv_start_length, Agent, Task, 'tmp', 1, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max);
+[dv_chk, fval_chk, result_chk] = checkSolution(xats_nf_S_R, Agent, Task);
 ```
 
 We should see the solution in a bar plot like the following one:
@@ -165,7 +158,7 @@ We should see the solution in a bar plot like the following one:
 To check a solution obtained with the solver we use the same command but changing `xats_nf_S_R` by `sol`:
 Last, we need to call the `checkSolution()` function:
 ```
-[dv_chk, fval_chk, result_chk] = checkSolution(sol, dv_start_length, Agent, Task, 'tmp', 1, z_max, tfin_max, Tw_max, U_max, d_tmax_max, s_used_max);
+[dv_chk, fval_chk, result_chk] = checkSolution(sol, Agent, Task);
 ```
 
 **Note** that there may be more that one optimal solution, and as a consequence of that, the showed solution may be an equivalent solution to the one founded by the solver. Mainly, the tasks where the coordination waiting times are applied may change.

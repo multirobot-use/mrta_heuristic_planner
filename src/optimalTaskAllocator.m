@@ -1,9 +1,13 @@
 function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
+    % Minimum required input arguments: scenario_id, execution_id
+
     % scenario_id: numeric if predefined scenario, 0 if random, not numeric if saved scenario (saved scenario ID name)
     % execution_id: used in log file and as file sufix to save data in case we want to save the results
     % scenario size: 1x3 vector with the number of robots (A), number of tasks (T) (without counting the recharge task) and number of different types of robots (types). Used for random generated scenarios (scenario_id == 0)
     % formulation_variants_flags: 1x4 logic vector (empty to use default config: complete formulation): [recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag]
     % config_flags: 1x7 logic vector (empty to use default config): [save_flag, test_flag, solve_flag, recovery_flag, display_flag, log_file_flag, print_solution_flag]
+    last_toc = toc;
+    
     if isnumeric(scenario_id)
         predefined = scenario_id;
         old_executed_random_scenario_id = '';
@@ -59,9 +63,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         save_flag = true;
     end
 
-    %% Initialization
-    tic;
-
     % Create needed directories if they don't exists
     if ~exist('../mat/', 'dir')
         mkdir('../mat/')
@@ -95,7 +96,11 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % Scenario: predefined scenario (0 if random), number of agents, number of tasks, types of agents
     if isempty(old_executed_random_scenario_id)
         if predefined == 0
-            [Agent, Task] = scenario(scenario_size(1), scenario_size(2), scenario_size(3));
+            if nargin < 3
+                error('No random scenario size specified');
+            else
+                [Agent, Task] = scenario(scenario_size(1), scenario_size(2), scenario_size(3));
+            end
         else
             [Agent, Task] = scenario(predefined);
         end
@@ -122,56 +127,16 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % Get constant scenario information values
     [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
-    %% Set up linearization maximum and minimum values
-    % Get maximum an minimum values from Agents and Tasks
-    Task_Te = [Task.Te];
-    Te_min = 0;
-    Te_max = max(Task_Te);
-
-    % z is normalized by scaling its value between the theoretical maximum and minimum value for the total execution time.
-    % The minimum value is not 0, but for simplicity, it will be considered as 0.
-    % The maximum value can be computed as the sum of all tasks assigned to the slowest agent with a recharge task between them. 
-    % This would be Td_a_t_t(a,0,R) + sum from t = 2 to T of (2 * Td_a_t_t(a,R,t) + Te_t_nf(t,1)) + T*Te_t_nf(R,1), but for simplicity, it will be considered as sum from t = 1 to T of (Task(t).Te)
-    z_max = 0;
-    for t = 1:T
-        if t ~= R
-            z_max = z_max + Task(t).Te;
-        end
-    end
-    if z_max == 0
-        z_max = 1;
-    end
-
-    % U is normalized by scaling its value between the theoretical maximum and minimum value for the total vacancies.
-    % Task.N = 0 -> not specified, it doesn't penalize in the objective function.
-    % Task.N ~= 0 -> specified, so the number of selected Agents should be equal to Task.N, if not, it would penalize in the objective function.
-    % The vacancies minimum value is 0, while the maximum value can be computed as sum from t = 2 to T of (max(A-Task(t).N, Task(t).N - 1))
-    U_max = 0;
-    for t = 1:T
-        if t ~= R
-            if Task(t).N ~= 0
-                U_max = U_max + max(A - Task(t).N, Task(t).N - 1);
-            end
-        end
-    end
-    if U_max == 0
-        U_max = 1;
-    end
-
-    % d_tmax_tfin_a_s is normalized by scaling its value between zero and the maximum tmax(t) value.
-    d_tmax_max = max([Task.tmax]);
-
-    % s_used is normalized by scaling its value between zero and the total number of slots.
-    s_used_max = S*A;
-
-    % Tw is normalized by scaling its value between zero and the maximum Agent.Ft value.
-    Tw_max = max([Agent.Ft]);
-
-    % Maximum time of the mission (s)
-    tmax_m = T * (Task_Te(R) + max(Task_Te([1:R-1 R+1:T])) + max(max(max(Td_a_t_t))));
+    % Get objective function normalization weights
+    [z_max, tmax_m, Tw_max, U_max, d_tmax_max, s_used_max] = getNormalizationWeights(Agent, Task);
 
     % Update Recharge maximum time
     Task(R).tmax = tmax_m;
+
+    % Set up linearization maximum and minimum values
+    % Get maximum an minimum values from Agents and Tasks
+    Te_min = 0;
+    Te_max = max([Task.Te]);
 
     % Minimum and maximum number of agents. Needed for later linearizations.
     na_min = 0;
@@ -254,70 +219,39 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % TeR_t_a1_s1_a2_s2:   (Real)    aux decision variable to linearize de product of R_t_a1_s1_a2_s2 and Te_a2_s2. Note that R_t_a1_s1_a2_s2 != R_t_a2_s2_a1_s1.
     % -------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-    % Length of each decision variable
-    length_z                   = 1;
-    length_x_a_t_s             = A*(T+1)*(S+1);
-    length_xx_a_t_t_s          = A*(T+1)*T*S;
-    length_V_t                 = T;
-    length_U_t                 = T;
-    length_n_t                 = T;
-    length_na_t                = T;
-    length_nq_t                = T;
-    length_nq_a_t              = A*T;
-    length_nf_t                = T;
-    length_nf_t_nf             = T*N;
-    length_nfx_a_nf_t_s        = A*N*T*S;
-    length_naf_t_nf            = T*N;
-    length_nax_a_t_s           = A*T*S;
-    length_Ft_a_s              = A*(S+1);
-    length_Ftx_a_s1            = A*S;
-    length_tfin_a_s            = A*(S+1);
-    length_tfinx_a_t_s         = A*T*S;
-    length_d_tmax_tfin_a_s     = A*S;
-    length_s_used              = 1;
-    length_Td_a_s              = A*S;
-    length_Tw_a_s              = A*S;
-    length_Twx_a_s             = A*S;
-    length_Te_a_s              = A*S;
-    length_S_t_a1_s1_a2_s2     = (T-1)*A*S*A*S;
-    length_tfinS_t_a1_s1_a2_s2 = 2*(T-1)*A*S*A*S;
-    length_R_t_a1_s1_a2_s2     = (T-1)*A*S*A*S;
-    length_tfinR_t_a1_s1_a2_s2 = 2*(T-1)*A*S*A*S;
-    length_TeR_t_a1_s1_a2_s2   = (T-1)*A*S*A*S;
+    % Get start length structure information
+    [dv_start_length, length_dv] = getStartLengthInformation(Agent, Task);
 
-    % Starting position of each decision variable in the decision variable vector:
-    start_z                   = 1;
-    start_x_a_t_s             = start_z                   + length_z;
-    start_xx_a_t_t_s          = start_x_a_t_s             + length_x_a_t_s;
-    start_V_t                 = start_xx_a_t_t_s          + length_xx_a_t_t_s;
-    start_U_t                 = start_V_t                 + length_V_t;
-    start_n_t                 = start_U_t                 + length_U_t;
-    start_na_t                = start_n_t                 + length_n_t;
-    start_nq_t                = start_na_t                + length_na_t;
-    start_nq_a_t              = start_nq_t                + length_nq_t;
-    start_nf_t                = start_nq_a_t              + length_nq_a_t;
-    start_nf_t_nf             = start_nf_t                + length_nf_t;
-    start_nfx_a_nf_t_s        = start_nf_t_nf             + length_nf_t_nf;
-    start_naf_t_nf            = start_nfx_a_nf_t_s        + length_nfx_a_nf_t_s;
-    start_nax_a_t_s           = start_naf_t_nf            + length_naf_t_nf;
-    start_Ft_a_s              = start_nax_a_t_s           + length_nax_a_t_s;
-    start_Ftx_a_s1            = start_Ft_a_s              + length_Ft_a_s;
-    start_tfin_a_s            = start_Ftx_a_s1            + length_Ftx_a_s1;
-    start_tfinx_a_t_s         = start_tfin_a_s            + length_tfin_a_s;
-    start_d_tmax_tfin_a_s     = start_tfinx_a_t_s         + length_tfinx_a_t_s;
-    start_s_used              = start_d_tmax_tfin_a_s     + length_d_tmax_tfin_a_s;
-    start_Td_a_s              = start_s_used              + length_s_used;
-    start_Tw_a_s              = start_Td_a_s              + length_Td_a_s;
-    start_Twx_a_s             = start_Tw_a_s              + length_Tw_a_s;
-    start_Te_a_s              = start_Twx_a_s             + length_Twx_a_s;
-    start_S_t_a1_s1_a2_s2     = start_Te_a_s              + length_Te_a_s;
-    start_tfinS_t_a1_s1_a2_s2 = start_S_t_a1_s1_a2_s2     + length_S_t_a1_s1_a2_s2;
-    start_R_t_a1_s1_a2_s2     = start_tfinS_t_a1_s1_a2_s2 + length_tfinS_t_a1_s1_a2_s2;
-    start_tfinR_t_a1_s1_a2_s2 = start_R_t_a1_s1_a2_s2     + length_R_t_a1_s1_a2_s2;
-    start_TeR_t_a1_s1_a2_s2   = start_tfinR_t_a1_s1_a2_s2 + length_tfinR_t_a1_s1_a2_s2;
-
-    % Compute the total length of the decision variable vector:
-    length_dv = length_z + length_x_a_t_s + length_xx_a_t_t_s + length_V_t + length_U_t + length_n_t + length_na_t + length_nq_t + length_nq_a_t + length_nf_t + length_nf_t_nf + length_nfx_a_nf_t_s + length_naf_t_nf + length_nax_a_t_s + length_Ft_a_s + length_Ftx_a_s1 + length_tfin_a_s + length_tfinx_a_t_s + length_d_tmax_tfin_a_s + length_s_used + length_Td_a_s + length_Tw_a_s + length_Twx_a_s + length_Te_a_s + length_S_t_a1_s1_a2_s2 + length_tfinS_t_a1_s1_a2_s2 + length_R_t_a1_s1_a2_s2 + length_tfinR_t_a1_s1_a2_s2 + length_TeR_t_a1_s1_a2_s2;
+    % Get all dv start and length information
+    [start_z                   length_z                   ...
+     start_x_a_t_s             length_x_a_t_s             ...
+     start_xx_a_t_t_s          length_xx_a_t_t_s          ...
+     start_V_t                 length_V_t                 ...
+     start_U_t                 length_U_t                 ...
+     start_n_t                 length_n_t                 ...
+     start_na_t                length_na_t                ...
+     start_nq_t                length_nq_t                ...
+     start_nq_a_t              length_nq_a_t              ...
+     start_nf_t                length_nf_t                ...
+     start_nf_t_nf             length_nf_t_nf             ...
+     start_nfx_a_nf_t_s        length_nfx_a_nf_t_s        ...
+     start_naf_t_nf            length_naf_t_nf            ...
+     start_nax_a_t_s           length_nax_a_t_s           ...
+     start_Ft_a_s              length_Ft_a_s              ...
+     start_Ftx_a_s1            length_Ftx_a_s1            ...
+     start_tfin_a_s            length_tfin_a_s            ...
+     start_tfinx_a_t_s         length_tfinx_a_t_s         ...
+     start_d_tmax_tfin_a_s     length_d_tmax_tfin_a_s     ...
+     start_s_used              length_s_used              ...
+     start_Td_a_s              length_Td_a_s              ...
+     start_Tw_a_s              length_Tw_a_s              ...
+     start_Twx_a_s             length_Twx_a_s             ...
+     start_Te_a_s              length_Te_a_s              ...
+     start_S_t_a1_s1_a2_s2     length_S_t_a1_s1_a2_s2     ...
+     start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2 ...
+     start_R_t_a1_s1_a2_s2     length_R_t_a1_s1_a2_s2     ...
+     start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2 ...
+     start_TeR_t_a1_s1_a2_s2   length_TeR_t_a1_s1_a2_s2      ] = extractStartLengthInformation(dv_start_length);
 
     % Maximum number of sparse terms per decision variable
     N_Hard_eq_sparse_terms            = (T - 1) * 1;
@@ -452,9 +386,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     start_relays_ineq          = start_synch_ineq           + synch_ineq;
     start_linearizations_ineq  = start_relays_ineq          + relays_ineq;
 
-    % Put all decision variable starting positions and lengths together in a dictionary using the var names as keys and the starting positions as values:
-    dv_start_length = containers.Map({'z', 'x_a_t_s', 'xx_a_t_t_s', 'V_t', 'U_t', 'n_t', 'na_t', 'nq_t', 'nq_a_t', 'nf_t', 'nf_t_nf', 'nfx_a_nf_t_s', 'naf_t_nf', 'nax_a_t_s', 'Ft_a_s', 'Ftx_a_s1', 'tfin_a_s', 'tfinx_a_t_s', 'd_tmax_tfin_a_s', 's_used', 'Td_a_s', 'Tw_a_s', 'Twx_a_s', 'Te_a_s','S_t_a1_s1_a2_s2', 'tfinS_t_a1_s1_a2_s2', 'R_t_a1_s1_a2_s2', 'tfinR_t_a1_s1_a2_s2', 'TeR_t_a1_s1_a2_s2'}, {[start_z length_z], [start_x_a_t_s length_x_a_t_s], [start_xx_a_t_t_s length_xx_a_t_t_s], [start_V_t length_V_t], [start_U_t length_U_t], [start_n_t length_n_t], [start_na_t length_na_t], [start_nq_t length_nq_t], [start_nq_a_t length_nq_a_t], [start_nf_t length_nf_t], [start_nf_t_nf length_nf_t_nf], [start_nfx_a_nf_t_s length_nfx_a_nf_t_s], [start_naf_t_nf length_naf_t_nf], [start_nax_a_t_s length_nax_a_t_s], [start_Ft_a_s length_Ft_a_s], [start_Ftx_a_s1 length_Ftx_a_s1], [start_tfin_a_s length_tfin_a_s], [start_tfinx_a_t_s length_tfinx_a_t_s], [start_d_tmax_tfin_a_s length_d_tmax_tfin_a_s], [start_s_used length_s_used], [start_Td_a_s length_Td_a_s], [start_Tw_a_s length_Tw_a_s], [start_Twx_a_s length_Twx_a_s], [start_Te_a_s length_Te_a_s], [start_S_t_a1_s1_a2_s2 length_S_t_a1_s1_a2_s2], [start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2], [start_R_t_a1_s1_a2_s2 length_R_t_a1_s1_a2_s2], [start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2], [start_TeR_t_a1_s1_a2_s2 length_TeR_t_a1_s1_a2_s2]});
-
     % Objective function equations: memory is reserved for the maximum expected number of sparse elements
     A_double_sparse   = spalloc(max_ineq, length_dv, max_ineq_sparse_terms);
     b_double_sparse   = spalloc(max_ineq,         1, max_ineq_independent_sparse_terms);
@@ -581,12 +512,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         sol = [];
         fval = 0;
         solving_time = 0;
-        save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
         return;
-    end
-
-    if save_flag
-        save('../mat/planner_workspace.mat', 'Agent', 'Task', 'A', 'N', 'T', 'S', 'R', 'dv_start_length', 'Td_a_t_t', 'Te_t_nf', 'H_a_t', 'z_max', 'tfin_max', 'Tw_max', 'U_max', 'd_tmax_max', 's_used_max');
     end
 
     %% Initialize parallel pool
@@ -597,22 +523,22 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         end
 
         if display_flag
-            disp(strcat("Initialization time: ", num2str(toc), "s"));
+            disp(strcat("Initialization time: ", num2str(toc - last_toc), "s"));
         end
         if log_file_flag
-            fprintf(logFile, "Initialization time: %f s\n", toc);
+            fprintf(logFile, "Initialization time: %f s\n", toc - last_toc);
         end
     end
 
     %% Equations and constraints
-    tic;
+    last_toc = toc;
 
     % Objective function coefficients
     f = zeros(1,length_dv);
     switch objective_function
         case 2
             % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-            f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tfin_max;
+            f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
         otherwise
             % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
             f((start_z - 1) + 1) = 1/z_max;
@@ -1592,22 +1518,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     %% Optimization
     if display_flag
-        disp(strcat("Time to build A, b, Aeq and beq matrices: ", num2str(toc), "s"));
+        disp(strcat("Time to build A, b, Aeq and beq matrices: ", num2str(toc - last_toc), "s"));
     end
     if log_file_flag
-        fprintf(logFile, "Time to build A, b, Aeq and beq matrices: %f s\n", toc);
-    end
-
-    % Save A, b, Aeq and beq matrices
-    if save_flag
-        save(strcat("../mat/A_double_sparse_", execution_id, ".mat"), 'A_double_sparse');
-        save(strcat("../mat/b_double_sparse_", execution_id, ".mat"), 'b_double_sparse');
-        save(strcat("../mat/Aeq_double_sparse_", execution_id, ".mat"), 'Aeq_double_sparse');
-        save(strcat("../mat/beq_double_sparse_", execution_id, ".mat"), 'beq_double_sparse');
+        fprintf(logFile, "Time to build A, b, Aeq and beq matrices: %f s\n", toc - last_toc);
     end
 
     %% Solver
-    tic;
+    last_toc = toc;
 
     % Solver settings: see https://es.mathworks.com/help/optim/ug/intlinprog.html#btv2x05
     switch solver_config
@@ -1643,12 +1561,12 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         save(strcat("../mat/output_", execution_id, ".mat"), 'output');
     end
 
-    solving_time = toc;
+    solving_time = toc - last_toc;
     if display_flag
-        disp(strcat("Solving time: ", num2str(toc), "s"));
+        disp(strcat("Solving time: ", num2str(solving_time), "s"));
     end
     if log_file_flag
-        fprintf(logFile, "Solving time: %f s\n", toc);
+        fprintf(logFile, "Solving time: %f s\n", solving_time);
     end
 
     if not(isempty(sol))
@@ -1668,7 +1586,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         switch objective_function
             case 2
                 % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-                f_term((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tfin_max;
+                f_term((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
             otherwise
                 % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
                 f_term((start_z - 1) + 1) = 1/z_max;
@@ -1731,6 +1649,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     %% Print solution
     if print_solution_flag
-        printSolution(sol, fval, Agent, Task, dv_start_length, execution_id, objective_function, predefined);
+        printSolution(sol, Agent, Task, scenario_id, execution_id, fval);
     end
 end

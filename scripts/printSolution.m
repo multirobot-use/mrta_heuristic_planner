@@ -1,10 +1,15 @@
 %% Print solution
-function printSolution(sol, fval, Agent, Task, dv_start_length, execution_id, objective_function, predefined)
+function printSolution(sol, Agent, Task, scenario_id, execution_id, fval)
+    % Minimum required inputs: sol, Agent, Task
+    
     if not(isempty(sol))
         tol = 1e-6;
 
         % Get scenario information
         [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+
+        % Get start length structure information
+        [dv_start_length, length_dv] = getStartLengthInformation(Agent, Task);
 
         % Extract necessary decision variables values from solution vector
         % Extract x_a_t_s and reshape back solution vector to matrix x(start_x_a_t_s : start_x_a_t_s + length_x_a_t_s - 1) -> x(a,t,s)
@@ -98,10 +103,8 @@ function printSolution(sol, fval, Agent, Task, dv_start_length, execution_id, ob
         % Set axis labels
         xlabel('Time (s)', 'FontSize', 16);
         ylabel('Robot','FontSize', 16);
-        if objective_function < 2
-            xticks('auto');
-            xlim([0 sol(1)]);
-        end
+        xticks('auto');
+        xlim([0 sol(1)]);
         yticks([1:A]);
         ylim([0.5 A+0.5]);
 
@@ -109,8 +112,37 @@ function printSolution(sol, fval, Agent, Task, dv_start_length, execution_id, ob
         set(gca,'FontSize', 16, 'XGrid', 'on', 'YGrid', 'off','xminorgrid','on');
 
         % Set title
-        title(strcat('Mission plan (', strrep(execution_id,'_','\_'), ') - Scenario: ', num2str(predefined), ' - fval: ', num2str(fval)));
+        switch nargin
+            case 4
+                if not(isempty(execution_id))
+                    title(strcat('Mission plan (', strrep(execution_id,'_','\_'), ').'));
+                else
+                    title('Mission plan.');
+                end
+            case 5
+                if isempty(execution_id) && isempty(scenario_id)
+                    title('Mission plan.');
+                elseif isempty(execution_id) && not(isempty(scenario_id))
+                    title(strcat('Mission plan for scenario: ', num2str(scenario_id), '.'));
+                elseif not(isempty(execution_id)) && isempty(scenario_id)
+                    title(strcat('Mission plan (', strrep(execution_id,'_','\_'), ').'));
+                else
+                    title(strcat('Mission plan for scenario: ', num2str(scenario_id), '(', strrep(execution_id,'_','\_'), ').'));
+                end
+            case 6
+                if isempty(execution_id) && isempty(scenario_id)
+                    title(strcat('Mission plan. fval: ', num2str(fval), '.'));
+                elseif isempty(execution_id) && not(isempty(scenario_id))
+                    title(strcat('Mission plan for scenario: ', num2str(scenario_id), '. fval: ', num2str(fval), '.'));
+                elseif not(isempty(execution_id)) && isempty(scenario_id)
+                    title(strcat('Mission plan (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval), '.'));
+                else
+                    title(strcat('Mission plan for scenario: ', num2str(scenario_id), '(', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval)));
+                end
+        end
         
-        saveas(gcf, strcat("../fig/", execution_id), 'fig');
+        if nargin > 4 && not(isempty(execution_id))
+            saveas(gcf, strcat("../fig/", execution_id), 'fig');
+        end
     end
 end
