@@ -24,12 +24,6 @@ function printSolution(sol, Agent, Task, scenario_id, execution_id, fval)
         length_tfin_a_s = start_length(2);
         tfin_a_s = reshape(sol(start_tfin_a_s : start_tfin_a_s + length_tfin_a_s - 1), A, S+1);
 
-        % Extract nf_t_nf and reshape back solution vector to matrix nf_t_nf(start_nf_t_nf : start_nf_t_nf + length_nf_t_nf - 1) -> nf_t_nf(t,nf)
-        start_length = dv_start_length('nf_t_nf');
-        start_nf_t_nf = start_length(1);
-        length_nf_t_nf = start_length(2);
-        nf_t_nf = reshape(sol(start_nf_t_nf : start_nf_t_nf + length_nf_t_nf - 1), T, N);
-
         % Extract Td_a_s and reshape back solution vector to matrix Td_a_s(start_Td_a_s : start_Td_a_s + length_Td_a_s - 1) -> Td(a,s)
         start_length = dv_start_length('Td_a_s');
         start_Td_a_s = start_length(1);
