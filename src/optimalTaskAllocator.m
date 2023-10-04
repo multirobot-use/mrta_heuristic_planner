@@ -1651,4 +1651,9 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     if print_solution_flag
         printSolution(sol, Agent, Task, scenario_id, execution_id, fval);
     end
+
+    if isempty(sol) && predefined == 0 && not(save_flag)
+        save(strcat('../mat/Agent_', execution_id, '.mat'), 'Agent');
+        save(strcat('../mat/Task_', execution_id, '.mat'), 'Task');
+    end
 end
