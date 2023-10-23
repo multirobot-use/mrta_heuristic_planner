@@ -1,4 +1,4 @@
-function [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task)
+function [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task)
     % Number of Agents
     A = length(Agent);
     if A < 1
@@ -30,6 +30,7 @@ function [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(A
             end
         end
     end
+
     % Safety flight time for each robot depending on its traveling speed and its distance to the recharge station
     for a = 1:A
         dist = norm([Agent(a).P0.x, Agent(a).P0.y, Agent(a).P0.z] - [Task(R).wp.x, Task(R).wp.y, Task(R).wp.z]);
@@ -56,7 +57,7 @@ function [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(A
     end
 
     % Estimate the upper bound for the number of fragments a task is divided into
-    N = 2 + ceil((max([Task.Te]) * (1 + max([Task.Fl]) / 100)) / (min([Agent.Ft]) - max([Agent.Ft_saf]) - max(max(max(Td_a_t_t)))));
+    N = ceil((max([Task.Te]) * (1 + max([Task.Fl]) / 100)) / (min([Agent.Ft]) - max([Agent.Ft_saf]) - max(Td_a_t_t(:))));
 
     % Calculate Te(t,nf) matrix
     Te_t_nf = ones(T,N);
@@ -79,16 +80,17 @@ function [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(A
     % The maximum possible slots to be needed is 2*(T-1)*max(nf). As relays are allowed, tasks may be assigned to more than a single Agent and more than once. Also, a recharge may be needed before each task. However, sometimes a smaller value for S could be set safely.
     % A slightly more realistic value for S would be 2*sum from t = 2 to T of (nf(t))
     % nf(t) can be estimated as ceil((max(Td(t) + Te(t)*(1 + Task(t).Fl)) / min((Ft(a) - Ft_saf(a))|Hr))
-    % To simplify, est_nf(t) = ceil((Td_max + Te(t) * (1 + Task(t).Fl)) / min((Ft(a) - Ft_saf(a))*ismember([Agent.type], Task(t).Hr)))
+    % To simplify, est_nf(t) = ceil((Te(t) * (1 + Task(t).Fl)) / (min((Ft(a) - Ft_saf(a)) - Td_max)*ismember([Agent.type], Task(t).Hr)))
     S = 0;
-    est_nf = 0;
     for t = 1:T
         if t ~= R
-            est_nf = ceil((max(max(max(Td_a_t_t))) + Te_t_nf(t,1) * (1 + Task(t).Fl/100)) / min(nonzeros(([Agent.Ft] - [Agent.Ft_saf]).*ismember([Agent.type], Task(t).Hr))));
-            S = S + est_nf;
+            aux_N = Task(t).N;
+            if aux_N == 0
+                aux_N = 1;
+            end
+            S = S + 2 * ceil((Task(t).Te * (1 + Task(t).Fl/100) * aux_N) / (min(nonzeros(([Agent.Ft] - [Agent.Ft_saf] - max(Td_a_t_t(:))).*ismember([Agent.type], Task(t).Hr))) * sum(ismember([Agent.type], Task(t).Hr))));
         end
     end
-    S = 2 * S;
 
     % Agent - Task compatibility
     H_a_t = zeros(A, T);

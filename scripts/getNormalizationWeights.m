@@ -1,6 +1,6 @@
-function [z_max, tmax_m, Tw_max, U_max, d_tmax_max, s_used_max] = getNormalizationWeights(Agent, Task)
+function [z_max, tmax_m, Tw_max, V_max, d_tmax_max, s_used_max] = getNormalizationWeights(Agent, Task)
     % Get constant scenario information values
-    [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
     
     % z is normalized by scaling its value between the theoretical maximum and minimum value for the total execution time.
     % The minimum value is not 0, but for simplicity, it will be considered as 0.
@@ -23,20 +23,20 @@ function [z_max, tmax_m, Tw_max, U_max, d_tmax_max, s_used_max] = getNormalizati
     % Tw is normalized by scaling its value between zero and the maximum Agent.Ft value.
     Tw_max = max([Agent.Ft]);
 
-    % U is normalized by scaling its value between the theoretical maximum and minimum value for the total vacancies.
+    % V is normalized by scaling its value between the theoretical maximum and minimum value for the total vacancies.
     % Task.N = 0 -> not specified, it doesn't penalize in the objective function.
     % Task.N ~= 0 -> specified, so the number of selected Agents should be equal to Task.N, if not, it would penalize in the objective function.
-    % The vacancies minimum value is 0, while the maximum value can be computed as sum from t = 2 to T of (max(A-Task(t).N, Task(t).N - 1))
-    U_max = 0;
+    % The vacancies minimum value is 0, while the maximum value can be computed as sum from t = 2 to T of (Task(t).N - 1)
+    V_max = 0;
     for t = 1:T
         if t ~= R
             if Task(t).N ~= 0
-                U_max = U_max + max(A - Task(t).N, Task(t).N - 1);
+                V_max = V_max + Task(t).N - 1;
             end
         end
     end
-    if U_max == 0
-        U_max = 1;
+    if V_max == 0
+        V_max = 1;
     end
 
     % d_tmax_tfin_a_s is normalized by scaling its value between zero and the maximum tmax(t) value.

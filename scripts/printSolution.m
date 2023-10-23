@@ -1,12 +1,15 @@
 %% Print solution
-function printSolution(sol, Agent, Task, scenario_id, execution_id, fval)
+function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, fval)
     % Minimum required inputs: sol, Agent, Task
+    if nargin < 3
+        error('Not enough input arguments.');
+    end
     
     if not(isempty(sol))
         tol = 1e-6;
 
         % Get scenario information
-        [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+        [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
         % Get start length structure information
         [dv_start_length, length_dv] = getStartLengthInformation(Agent, Task);
@@ -41,6 +44,42 @@ function printSolution(sol, Agent, Task, scenario_id, execution_id, fval)
         start_Te_a_s = start_length(1);
         length_Te_a_s = start_length(2);
         Te = reshape(sol(start_Te_a_s : start_Te_a_s + length_Te_a_s - 1), A, S);
+
+        % Join consecutive tasks of the same type
+        if nargin < 4 || isempty(join_flag) || join_flag
+            for a = 1:A
+                for s = 1:S-1
+                    for t = 1:T
+                        repeat_flag = 1;
+                        while repeat_flag
+                            repeat_flag = 0;
+                            if x_a_t_s(a,t + 1,s + 1) && x_a_t_s(a,t + 1,(s+1) + 1)
+                                % Join displacement, waiting and execution times
+                                Td(a,s) = Td(a,s) + Td(a,s + 1);
+                                Tw(a,s) = Tw(a,s) + Tw(a,s + 1);
+                                Te(a,s) = Te(a,s) + Te(a,s + 1);
+                                % Update displacement, waiting and execution times for the slots that have been moved
+                                Td(a,s + 1:S) = [Td(a,(s+1) + 1:S), 0];
+                                Tw(a,s + 1:S) = [Tw(a,(s+1) + 1:S), 0];
+                                Te(a,s + 1:S) = [Te(a,(s+1) + 1:S), 0];
+                                % Move the empty slot to the end
+                                for slot = s+1:S-1
+                                    for task = 1:T
+                                        x_a_t_s(a,task + 1,slot + 1) = x_a_t_s(a,task + 1,(slot+1) + 1);
+                                    end
+                                end
+                                % Empty the last slot
+                                x_a_t_s(a,t + 1,S + 1) = 0;
+                                % Update tfin for the slots that have been moved
+                                tfin_a_s(a,s + 1:S + 1) = [tfin_a_s(a,(s+1) + 1:S + 1), tfin_a_s(a,S + 1)];
+                                % Set the flag to repeat the process
+                                repeat_flag = 1;
+                            end
+                        end
+                    end
+                end
+            end
+        end
 
         % Open a new figure
         figure();
@@ -107,35 +146,39 @@ function printSolution(sol, Agent, Task, scenario_id, execution_id, fval)
 
         % Set title
         switch nargin
-            case 4
-                if not(isempty(execution_id))
-                    title(strcat('Mission plan (', strrep(execution_id,'_','\_'), ').'));
-                else
-                    title('Mission plan.');
-                end
-            case 5
-                if isempty(execution_id) && isempty(scenario_id)
-                    title('Mission plan.');
-                elseif isempty(execution_id) && not(isempty(scenario_id))
-                    title(strcat('Mission plan for scenario: ', num2str(scenario_id), '.'));
-                elseif not(isempty(execution_id)) && isempty(scenario_id)
-                    title(strcat('Mission plan (', strrep(execution_id,'_','\_'), ').'));
-                else
-                    title(strcat('Mission plan for scenario: ', num2str(scenario_id), '(', strrep(execution_id,'_','\_'), ').'));
-                end
-            case 6
-                if isempty(execution_id) && isempty(scenario_id)
-                    title(strcat('Mission plan. fval: ', num2str(fval), '.'));
-                elseif isempty(execution_id) && not(isempty(scenario_id))
-                    title(strcat('Mission plan for scenario: ', num2str(scenario_id), '. fval: ', num2str(fval), '.'));
-                elseif not(isempty(execution_id)) && isempty(scenario_id)
-                    title(strcat('Mission plan (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval), '.'));
-                else
-                    title(strcat('Mission plan for scenario: ', num2str(scenario_id), '(', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval)));
-                end
+        case 3
+            title('Mission plan.');
+        case 4
+            title('Mission plan.');
+        case 5
+            if not(isempty(scenario_id))
+                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.'));
+            else
+                title('Mission plan.');
+            end
+        case 6
+            if isempty(execution_id) && isempty(scenario_id)
+                title('Mission plan.');
+            elseif isempty(execution_id) && not(isempty(scenario_id))
+                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.'));
+            elseif not(isempty(execution_id)) && isempty(scenario_id)
+                title(strcat('Mission plan (', strrep(execution_id,'_','\_'), ').'));
+            else
+                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '(', strrep(execution_id,'_','\_'), ').'));
+            end
+        case 7
+            if isempty(execution_id) && isempty(scenario_id)
+                title(strcat('Mission plan. fval: ', num2str(fval), '.'));
+            elseif isempty(execution_id) && not(isempty(scenario_id))
+                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '. fval: ', num2str(fval), '.'));
+            elseif not(isempty(execution_id)) && isempty(scenario_id)
+                title(strcat('Mission plan (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval), '.'));
+            else
+                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '(', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval)));
+            end
         end
         
-        if nargin > 4 && not(isempty(execution_id))
+        if nargin > 5 && not(isempty(execution_id))
             saveas(gcf, strcat("../fig/", execution_id), 'fig');
         end
     end

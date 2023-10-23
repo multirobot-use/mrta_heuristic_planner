@@ -1,7 +1,7 @@
 %% Print solution
 function previewScenario(Agent, Task, scenario_id)
     % Get scenario information
-    [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
     barWidth = 0.8;
 
@@ -96,7 +96,10 @@ function previewScenario(Agent, Task, scenario_id)
 
     % Set title
     subplot(2,1,1);
-    title(strcat('Preview of scenario "', strrep(scenario_id,'_','\_'), '". S= ', num2str(S), ', N= ', num2str(N),'.'));
-    
-    saveas(gcf, strcat("../fig/preview_scenario_", scenario_id), 'fig');
+    if nargin > 2 && not(isempty(scenario_id))
+        title(strcat('Preview of scenario "', strrep(scenario_id,'_','\_'), '". S= ', num2str(S), ', N= ', num2str(N),'.'));
+        saveas(gcf, strcat("../fig/preview_scenario_", scenario_id), 'fig');
+    else
+        title(strcat('Scenario preview. S= ', num2str(S), ', N= ', num2str(N),'.'));
+    end
 end

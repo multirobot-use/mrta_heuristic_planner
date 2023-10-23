@@ -125,10 +125,10 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     end
 
     % Get constant scenario information values
-    [A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
     % Get objective function normalization weights
-    [z_max, tmax_m, Tw_max, U_max, d_tmax_max, s_used_max] = getNormalizationWeights(Agent, Task);
+    [z_max, tmax_m, Tw_max, V_max, d_tmax_max, s_used_max] = getNormalizationWeights(Agent, Task);
 
     % Update Recharge maximum time
     Task(R).tmax = tmax_m;
@@ -168,8 +168,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
     % V_t:                 (Real)    vacancies. difference between the number of recruiters and the number of recruiters required for task t.
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
-    % U_t:                 (Real)    aux decision variable to compute de absolute value of V_t. It's the second part of the objective function.
-    % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
     % n_t:                 (Natural) total number of times that task t (is queued) appears among all queues.
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
     % na_t:                (Natural) number of Agents that are selected to carry out task t. Number of agents that are executing task t simultaneously.
@@ -204,7 +202,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
     % Tw_a_s:              (Real)    time that the task in slot s of agent a must wait after Td and before Te to synch its execution with the other Agent's tasks.
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
-    % Twx_a_s:             (Real)    aux decision variable to linearize the product of Tw_a_s and x_a_1_s.
+    % Twx_a_s:             (Real)    aux decision variable to linearize the product of Tw_a_s and x_a_t_s.
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
     % Te_a_s:              (Real)    time that the task in slot s of agent a takes to execute.
     % -------------------- ----------------------------------------------------------------------------------------------------------------------------------------
@@ -227,7 +225,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
      start_x_a_t_s             length_x_a_t_s             ...
      start_xx_a_t_t_s          length_xx_a_t_t_s          ...
      start_V_t                 length_V_t                 ...
-     start_U_t                 length_U_t                 ...
      start_n_t                 length_n_t                 ...
      start_na_t                length_na_t                ...
      start_nq_t                length_nq_t                ...
@@ -270,7 +267,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     t_fin_a_s_eq_sparse_terms         = A * (1 + S * (4 + T * 1));
     Ft_a_s_ineq_sparse_terms          = (A * S) * 1;
     Ft_a_s_eq_sparse_terms            = A * (1 + S * (6 + (T - 1) * N * 1));
-    U_t_ineq_sparse_terms             = (T - 1) * 4;
     V_t_eq_sparse_terms               = (T - 1) * 2;
     recharge_ineq_sparse_terms        = A * 1 * (S - 1) * 2;
     hardware_ineq_sparse_terms        = A * T * S * 1;
@@ -285,7 +281,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Max number of sparse terms in the matrixes
     max_eq_sparse_terms = N_Hard_eq_sparse_terms + Non_decomposable_eq_sparse_terms + Td_a_s_eq_sparse_terms + Te_a_s_eq_sparse_terms + n_t_eq_sparse_terms + nf_t_nf_eq_sparse_terms + nq_t_eq_sparse_terms + na_nf_n_t_eq_sparse_terms + t_fin_a_s_eq_sparse_terms + Ft_a_s_eq_sparse_terms + V_t_eq_sparse_terms + s_used_eq_sparse_terms + synch_eq_sparse_terms + relays_eq_sparse_terms;
-    max_ineq_sparse_terms = z_ineq_sparse_terms + nq_a_t_ineq_sparse_terms + na_nq_t_ineq_sparse_terms + naf_t_nf_ineq_sparse_terms + d_tmax_tfin_a_s_ineq_sparse_terms + Ft_a_s_ineq_sparse_terms + U_t_ineq_sparse_terms + recharge_ineq_sparse_terms + hardware_ineq_sparse_terms + max_ineq_sparse_terms + continuity_ineq_sparse_terms + synch_ineq_sparse_terms + relays_ineq_sparse_terms + linearizations_ineq_sparse_terms;
+    max_ineq_sparse_terms = z_ineq_sparse_terms + nq_a_t_ineq_sparse_terms + na_nq_t_ineq_sparse_terms + naf_t_nf_ineq_sparse_terms + d_tmax_tfin_a_s_ineq_sparse_terms + Ft_a_s_ineq_sparse_terms + recharge_ineq_sparse_terms + hardware_ineq_sparse_terms + max_ineq_sparse_terms + continuity_ineq_sparse_terms + synch_ineq_sparse_terms + relays_ineq_sparse_terms + linearizations_ineq_sparse_terms;
 
     % Maximum number of independent terms per decision variable
     N_Hard_eq_independent_sparse_terms            = 0;
@@ -304,7 +300,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     t_fin_a_s_eq_independent_sparse_terms         = 0;
     Ft_a_s_ineq_independent_sparse_terms          = (A * S) * 1;
     Ft_a_s_eq_independent_sparse_terms            = A * 1;
-    U_t_ineq_independent_sparse_terms             = 0;
     V_t_eq_independent_sparse_terms               = (T - 1) * 1;
     recharge_ineq_independent_sparse_terms        = A * 1 * (S - 1) * 1;
     hardware_ineq_independent_sparse_terms        = A * T * S * 1;
@@ -319,7 +314,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Max number of sparse terms in the independent terms
     max_eq_independent_sparse_terms = N_Hard_eq_independent_sparse_terms + Non_decomposable_eq_independent_sparse_terms + Td_a_s_eq_independent_sparse_terms + Te_a_s_eq_independent_sparse_terms + n_t_eq_independent_sparse_terms + nf_t_nf_eq_independent_sparse_terms + nq_t_eq_independent_sparse_terms + na_nf_n_t_eq_independent_sparse_terms + t_fin_a_s_eq_independent_sparse_terms + Ft_a_s_eq_independent_sparse_terms + V_t_eq_independent_sparse_terms + s_used_eq_independent_sparse_terms + synch_eq_independent_sparse_terms + relays_eq_independent_sparse_terms;
-    max_ineq_independent_sparse_terms = z_ineq_independent_sparse_terms + nq_a_t_ineq_independent_sparse_terms + na_nq_t_ineq_independent_sparse_terms + naf_t_nf_ineq_independent_sparse_terms + d_tmax_tfin_a_s_ineq_independent_sparse_terms + Ft_a_s_ineq_independent_sparse_terms + U_t_ineq_independent_sparse_terms + recharge_ineq_independent_sparse_terms + hardware_ineq_independent_sparse_terms + max_ineq_independent_sparse_terms + continuity_ineq_independent_sparse_terms + synch_ineq_independent_sparse_terms + relays_ineq_independent_sparse_terms + linearizations_ineq_independent_sparse_terms;
+    max_ineq_independent_sparse_terms = z_ineq_independent_sparse_terms + nq_a_t_ineq_independent_sparse_terms + na_nq_t_ineq_independent_sparse_terms + naf_t_nf_ineq_independent_sparse_terms + d_tmax_tfin_a_s_ineq_independent_sparse_terms + Ft_a_s_ineq_independent_sparse_terms + recharge_ineq_independent_sparse_terms + hardware_ineq_independent_sparse_terms + max_ineq_independent_sparse_terms + continuity_ineq_independent_sparse_terms + synch_ineq_independent_sparse_terms + relays_ineq_independent_sparse_terms + linearizations_ineq_independent_sparse_terms;
 
     % Maximum number of equations per decision variable
     N_Hard_eq            = (T - 1) * 1;
@@ -338,7 +333,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     t_fin_a_s_eq         = A * (1 + S * 1);
     Ft_a_s_ineq          = (A * S) * 1;
     Ft_a_s_eq            = A * (1 + S * 1);
-    U_t_ineq             = (T - 1) * 2;
     V_t_eq               = (T - 1) * 1;
     recharge_ineq        = A * 1 * (S - 1) * 1;
     hardware_ineq        = A * T * S * 1;
@@ -353,7 +347,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Max number of equations (rows in A and Aeq)
     max_eq = N_Hard_eq + Non_decomposable_eq + Td_a_s_eq + Te_a_s_eq + n_t_eq + nf_t_nf_eq + nq_t_eq + na_nf_n_t_eq + t_fin_a_s_eq + Ft_a_s_eq + V_t_eq + s_used_eq + synch_eq + relays_eq;
-    max_ineq = z_ineq + nq_a_t_ineq + na_nq_t_ineq + naf_t_nf_ineq + d_tmax_tfin_a_s_ineq + Ft_a_s_ineq + U_t_ineq + recharge_ineq + hardware_ineq + max1task_ineq + continuity_ineq + synch_ineq + relays_ineq + linearizations_ineq;
+    max_ineq = z_ineq + nq_a_t_ineq + na_nq_t_ineq + naf_t_nf_ineq + d_tmax_tfin_a_s_ineq + Ft_a_s_ineq + recharge_ineq + hardware_ineq + max1task_ineq + continuity_ineq + synch_ineq + relays_ineq + linearizations_ineq;
 
     % Start index for each equation
     start_N_Hard_eq            = 1;
@@ -377,8 +371,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     start_naf_t_nf_ineq        = start_na_nq_t_ineq         + na_nq_t_ineq;
     start_d_tmax_tfin_a_s_ineq = start_naf_t_nf_ineq        + naf_t_nf_ineq;
     start_Ft_a_s_ineq          = start_d_tmax_tfin_a_s_ineq + d_tmax_tfin_a_s_ineq;
-    start_U_t_ineq             = start_Ft_a_s_ineq          + Ft_a_s_ineq;
-    start_recharge_ineq        = start_U_t_ineq             + U_t_ineq;
+    start_recharge_ineq        = start_Ft_a_s_ineq          + Ft_a_s_ineq;
     start_hardware_ineq        = start_recharge_ineq        + recharge_ineq;
     start_max1task_ineq        = start_hardware_ineq        + hardware_ineq;
     start_continuity_ineq      = start_max1task_ineq        + max1task_ineq;
@@ -392,8 +385,8 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     Aeq_double_sparse = spalloc(max_eq,   length_dv, max_eq_sparse_terms);
     beq_double_sparse = spalloc(max_eq,           1, max_eq_independent_sparse_terms);
 
-    % dv = [z,      x_a_t_s,   xx_a_t_t_s,   V_t,    U_t,    n_t,       na_t,      nq_t,      nq_a_t,   nf_t,      nf_t_nf,   nfx_a_nf_t_s,   naf_t_nf,   nax_a_t_s,   Ft_a_s,   Ftx_a_s1,   tfin_a_s,   tfinx_a_t_s,   d_tmax_tfin_a_s,   s_used,    Td_a_s,    Tw_a_s,    Twx_a_s,    Te_a_s,    S_t_a1_s1_a2_s2,    tfinS_t_a1_s1_a2_s2,    R_t_a1_s1_a2_s2,    tfinR_t_a1_s1_a2_s2,    TeR_t_a1_s1_a2_s2];
-    %      [Real,   Binary,    Binary,       Real,   Real,   Natural,   Natural,   Natural,   Binary,   Natural,   Binary,    Binary,         Natural,    Natural,     Real,     Real,       Real,       Real,          Real,              Natural,   Real,      Real,      Real,       Real,      Binary,             Real,                   Binary,             Real               ,    Real             ];
+    % dv = [z,      x_a_t_s,   xx_a_t_t_s,   V_t,    n_t,       na_t,      nq_t,      nq_a_t,   nf_t,      nf_t_nf,   nfx_a_nf_t_s,   naf_t_nf,   nax_a_t_s,   Ft_a_s,   Ftx_a_s1,   tfin_a_s,   tfinx_a_t_s,   d_tmax_tfin_a_s,   s_used,    Td_a_s,    Tw_a_s,    Twx_a_s,    Te_a_s,    S_t_a1_s1_a2_s2,    tfinS_t_a1_s1_a2_s2,    R_t_a1_s1_a2_s2,    tfinR_t_a1_s1_a2_s2,    TeR_t_a1_s1_a2_s2];
+    %      [Real,   Binary,    Binary,       Real,   Natural,   Natural,   Natural,   Binary,   Natural,   Binary,    Binary,         Natural,    Natural,     Real,     Real,       Real,       Real,          Real,              Natural,   Real,      Real,      Real,       Real,      Binary,             Real,                   Binary,             Real               ,    Real             ];
 
     % Specify optimization variables that are integers/natural (or binary). Indexed of the variables that must be integers/natural (or binary with bounds).
     intcon = [  start_x_a_t_s         : start_x_a_t_s         + length_x_a_t_s         - 1, ...
@@ -418,7 +411,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     lb = -inf*ones(length_dv,1);
     lb(start_x_a_t_s           : start_x_a_t_s           + length_x_a_t_s           - 1) = 0;
     lb(start_xx_a_t_t_s        : start_xx_a_t_t_s        + length_xx_a_t_t_s        - 1) = 0;
-    lb(start_U_t               : start_U_t               + length_U_t               - 1) = 0;
+    lb(start_V_t               : start_V_t               + length_V_t               - 1) = 0;
     lb(start_n_t               : start_n_t               + length_n_t               - 1) = aux_lb_n_t;
     lb(start_na_t              : start_na_t              + length_na_t              - 1) = aux_lb_n_t;
     lb(start_nq_t              : start_nq_t              + length_nq_t              - 1) = aux_lb_n_t;
@@ -536,19 +529,19 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % Objective function coefficients
     f = zeros(1,length_dv);
     switch objective_function
-        case 2
-            % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-            f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
-        otherwise
-            % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
-            f((start_z - 1) + 1) = 1/z_max;
-            
-            % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
-            f((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
+    case 2
+        % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+        f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
+    otherwise
+        % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+        f((start_z - 1) + 1) = 1/z_max;
+        
+        % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
+        f((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
     end
 
-    % U: Coefficients of the term penalizing the use of a different number of Agents. U(2 to T) to exclude Recharge task.
-    f((start_U_t - 1) + 2 : (start_U_t - 1) + length_U_t) = 1/U_max;
+    % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
+    f((start_V_t - 1) + 2 : (start_V_t - 1) + length_V_t) = 1/V_max;
 
     % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
     f((start_d_tmax_tfin_a_s - 1) + 1 : (start_d_tmax_tfin_a_s - 1) + length_d_tmax_tfin_a_s) = 1/d_tmax_max;
@@ -878,24 +871,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 end
             end
             Aeq_double_sparse = Aeq_double_sparse + A_tmp;
-        end
-    end
-
-    %% U: Penalize the use of a different number of Agents
-    % Add constraints to linearize the absolute value of V and make U equal to |V|.
-    parfor t = 1:T
-        if t ~= R
-            A_tmp = spalloc(max_ineq, length_dv, 2);
-            % V - U <= 0
-            A_tmp((start_U_t_ineq - 1) + (t - 1), (start_V_t - 1) + t) = 1;
-            A_tmp((start_U_t_ineq - 1) + (t - 1), (start_U_t - 1) + t) = -1;
-            A_double_sparse = A_double_sparse + A_tmp;
-            
-            A_tmp = spalloc(max_ineq, length_dv, 2);
-            % - V - U <= 0
-            A_tmp((start_U_t_ineq - 1 + (T - 1)) + (t - 1), (start_V_t - 1) + t) = -1;
-            A_tmp((start_U_t_ineq - 1 + (T - 1)) + (t - 1), (start_U_t - 1) + t) = -1;
-            A_double_sparse = A_double_sparse + A_tmp;
         end
     end
 
@@ -1529,15 +1504,15 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Solver settings: see https://es.mathworks.com/help/optim/ug/intlinprog.html#btv2x05
     switch solver_config
-        case 1
-            % Save best solution so far while solving
-            options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @saveBestSolutionSoFar);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
-        case 2
-            % Stop when the first valid solution is found
-            options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @stopAtFirstValidSolution);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
-        otherwise
-            % No output function
-            options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+    case 1
+        % Save best solution so far while solving
+        options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @saveBestSolutionSoFar);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+    case 2
+        % Stop when the first valid solution is found
+        options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @stopAtFirstValidSolution);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+    otherwise
+        % No output function
+        options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
     end
 
     if not(solve_flag)
@@ -1584,12 +1559,12 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
         f_term = zeros(1,length_dv);
         switch objective_function
-            case 2
-                % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-                f_term((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
-            otherwise
-                % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
-                f_term((start_z - 1) + 1) = 1/z_max;
+        case 2
+            % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+            f_term((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
+        otherwise
+            % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+            f_term((start_z - 1) + 1) = 1/z_max;
         end
         fval_f1 = f_term*sol;
         if log_file_flag
@@ -1597,8 +1572,8 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         end
 
         f_term = zeros(1,length_dv);
-        % U: Coefficients of the term penalizing the use of a different number of Agents. U(2 to T) to exclude Recharge task.
-        f_term((start_U_t - 1) + 2 : (start_U_t - 1) + length_U_t) = 1/U_max;
+        % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
+        f_term((start_V_t - 1) + 2 : (start_V_t - 1) + length_V_t) = 1/V_max;
         fval_f2 = f_term*sol;
         if log_file_flag
             fprintf(logFile, "fval f_2 = %f s\n", fval_f2);
@@ -1632,12 +1607,12 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
         if log_file_flag
             switch objective_function
-                case 2
-                    % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-                    [fval fval_f1 fval_f2 fval_f3 fval_f4]
-                otherwise
-                    % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
-                    [fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5]
+            case 2
+                % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+                [fval fval_f1 fval_f2 fval_f3 fval_f4]
+            otherwise
+                % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+                [fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5]
             end
         end
     end
@@ -1649,10 +1624,11 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     %% Print solution
     if print_solution_flag
-        printSolution(sol, Agent, Task, scenario_id, execution_id, fval);
+        printSolution(sol, Agent, Task, 1, scenario_id, execution_id, fval);
     end
 
     if isempty(sol) && predefined == 0 && not(save_flag)
+        previewScenario(Agent, Task, scenario_id);
         save(strcat('../mat/Agent_', execution_id, '.mat'), 'Agent');
         save(strcat('../mat/Task_', execution_id, '.mat'), 'Task');
     end

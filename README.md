@@ -82,7 +82,7 @@ The names of the variables can be consulted in the [getVarValue](scripts/getVarV
 
 In case that we forgot to print the solution, we can also print it manually after loading the planner workspace information doing:
 ```
-printSolution(sol, Agent, Task, 'scenario_id', 'execution_id', fval);
+printSolution(sol, Agent, Task, 0, 'scenario_id', 'execution_id', fval);
 ```
 
 ## Check solution
@@ -91,7 +91,7 @@ There also available a script, [checkSolution.m](scripts/checkSolution.m), that 
 To see an example, lets say we want to check if a handmade solution for the predefined scenario number `5` is valid or not. The first step would be to load into the workspace the scenario information:
 ```
 [Agent, Task] = scenario(5);
-[A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+[Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 ```
 
 Then we need to build the solution itself and put the main decision variables into a vector:
