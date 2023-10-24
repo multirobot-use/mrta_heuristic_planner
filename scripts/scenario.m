@@ -1,8 +1,7 @@
 %% Function to switch between handmade pre-defined scenarios or random generated scenarios with some constraints
 function [Agent, Task] = scenario(A, T, types, discretized)
     % Randomly generated scenario: A robots, T Tasks (without counting the recharge task), "types" different types of robots
-    % In case we call thi function using a single input argument, A becomes the "predefined" scenario to select
-    % Note: from the third to the last output variables are needed to print the solution after solving. 
+    % In case we call this function using a single input argument, A becomes the "predefined" scenario to select
     switch nargin
     case 1
         predefined  = A;
@@ -14,8 +13,8 @@ function [Agent, Task] = scenario(A, T, types, discretized)
         random = 1;
     case 4
         predefined  = 0;
-        discretized = 1;
-        random = 0;
+        discretized = not(not(sum(discretized)));
+        random = not(sum(discretized));
     otherwise
         error('Invalid input');
     end
