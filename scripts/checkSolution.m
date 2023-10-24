@@ -15,6 +15,9 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
     [z_max, tmax_m, Tw_max, V_max, d_tmax_max, s_used_max] = getNormalizationWeights(Agent, Task);
 
+    % Update Recharge maximum time
+    Task(R).tmax = tmax_m;
+
     % Get start length structure information
     [dv_start_length, length_dv] = getStartLengthInformation(Agent, Task);
 
@@ -454,6 +457,26 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     end
 
     %% Synchronization constraints
+    % Synchronization constraints could be applied only to tasks that have a specified number of robots
+    for t = 1:T
+        if t ~= R
+            if Task(t).N == 0
+                for a1 = 1:A
+                    for s1 = 1:S
+                        for a2 = 1:A
+                            for s2 = 1:S
+                                if dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) ~= 0
+                                    disp(strcat('Synchronization constraints incorrectly applied to t = ', num2str(t), ', agent a1 = ', num2str(a1), ', s1 = ', num2str(s1), ', a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
+                                    result = false;
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     % "Synchronized tasks must be the same" constraint
     % S(t,a1,s1,a2,s2) < x(a1,t,s1), for all a1,a2 in A, s1,s2 in S and t in [2,T]
     % S(t,a1,s1,a2,s2) < x(a2,t,s2), for all a1,a2 in A, s1,s2 in S and t in [2,T] %? Intuition says me that one of them is enough
@@ -499,19 +522,21 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     % ns(t,a1,s1) = (na(t) - 1) * x(a1,t,s1) = na(t) * x(a1,t,s1) - x(a1,t,s1)
     for t = 1:T
         if t ~= R
-            for a1 = 1:A
-                for s1 = 1:S
-                    S_t = 0;
-                    for a2 = 1:A
-                        if a1 ~= a2
-                            for s2 = 1:S
-                                S_t = S_t + dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+            if Task(t).N ~= 0
+                for a1 = 1:A
+                    for s1 = 1:S
+                        S_t = 0;
+                        for a2 = 1:A
+                            if a1 ~= a2
+                                for s2 = 1:S
+                                    S_t = S_t + dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                end
                             end
                         end
-                    end
-                    if not(S_t <= (dv((start_na_t - 1) + t) - 1) * dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) + tol && (dv((start_na_t - 1) + t) - 1) * dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) - tol <= S_t)
-                        disp(strcat('Incorrect number of synchronizations for t = ', num2str(t)));
-                        result = false;
+                        if not(S_t <= (dv((start_na_t - 1) + t) - 1) * dv((start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) + tol && (dv((start_na_t - 1) + t) - 1) * dv((start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) - tol <= S_t)
+                            disp(strcat('Incorrect number of synchronizations for t = ', num2str(t)));
+                            result = false;
+                        end
                     end
                 end
             end
@@ -539,6 +564,27 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     end
 
     %% Relays constraints
+    % Relay constraints could be applied only to relayable tasks
+    for t = 1:T
+        if t ~= R
+            if Task(t).Relayability == 0
+                for a1 = 1:A
+                    for s1 = 1:S
+                        for a2 = 1:A
+                            for s2 = 1:S
+                                if dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) ~= 0
+                                    disp(strcat('Relay constraint incorrectly applied to task t = ', num2str(t), ', agent a1 = ', num2str(a1), ', s1 = ', num2str(s1), ', a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
+                                    result = false;
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+
     % "Relayed tasks must be the same" constraint
     % R(t,a1,s1,a2,s2) < x(a1,t,s1), for all a1,a2 in A, s1,s2 in S and t in [2,T]
     % R(t,a1,s1,a2,s2) < x(a2,t,s2), for all a1,a2 in A, s1,s2 in S and t in [2,T]

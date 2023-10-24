@@ -964,7 +964,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     %% Synchronization constraints
     parfor t = 1:T
         if t ~= R
-            % The constraints could be applied only to tasks that have a specified number of robots
+            % Synchronization constraints could be applied only to tasks that have a specified number of robots
             if Task(t).N ~= 0
                 for a1 = 1:A
                     for s1 = 1:S
@@ -1099,7 +1099,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     %% Relays constraints
     parfor t = 1:T
         if t ~= R
-            % The constraints could be applied only to relayable or fragmentable tasks
+            % Relay constraints could be applied only to relayable tasks
             if Task(t).Relayability == 1
                 for a1 = 1:A
                     for s1 = 1:S

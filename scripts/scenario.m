@@ -42,7 +42,7 @@ function [Agent, Task] = scenario(A, T, types, discretized)
         Ft_max = 40*60;
 
         % Maximum flight time already consumed initially (s)
-        Ft_0_max = 5*60;
+        Ft_0_max = 0.35 * Ft_min;
 
         % Traveling speed (m/s)
         ts = 5;
@@ -160,7 +160,7 @@ function [Agent, Task] = scenario(A, T, types, discretized)
         Ft = 20*60;
 
         % Maximum flight time already consumed initially (s)
-        Ft_0 = [Ft/4 Ft/2 Ft];
+        Ft_0 = [0 0.25 0.5] * Ft;
 
         % Traveling speed (m/s)
         ts = 5;
@@ -190,7 +190,7 @@ function [Agent, Task] = scenario(A, T, types, discretized)
         end
 
         % Task execution time (s)
-        Te_discrete = [0.75 1.5 2.5] * Ft;
+        Te_discrete = [0.35 1.25 2.5] * Ft;
 
         % Generate Tasks
         Task(1) =  struct('name', 't_R', 'Hr', [1:types], 'Te', 5*60, 'tmax', 0, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', recharge_wp(1), 'y', recharge_wp(2), 'z', recharge_wp(3)), 'color', [0.85 0.33 0.10]);
