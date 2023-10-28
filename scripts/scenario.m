@@ -221,6 +221,18 @@ function [Agent, Task] = scenario(A, T, types, discretized)
             case 2 % Relayable
                 Relayability = 1;
                 Fragmentability = 0;
+                % If there is only one compatible robot, it should be able to execute the task without using relays
+                % Else, if the randomly selected execution time is longer than the robots flight time minus the safety flight time, we would need at least one of the compatible robots to perform relays
+                % Else, no need to do nothing
+                % Note: with the correct amount of maximum fragments for a task, one extra robot is enough to perform the needed relays to the rest in a multi-robot fragmentable task
+                if max_N == 1
+                    % Switch randomly selected execution time to the shortest one
+                    Te = Te_discrete(1);
+                
+                elseif Te > Ft - 2 * Ft_saf_max
+                    % Reduce the upper bound for N in one unit
+                    max_N = max_N - 1;
+                end
             case 3 % Fragmentable
                 Relayability = 0;
                 Fragmentability = 1;
