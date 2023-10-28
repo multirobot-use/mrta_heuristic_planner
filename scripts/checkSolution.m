@@ -3,6 +3,10 @@
 function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, print_coord_steps_flag)
     % Minimum required inputs: sol, Agent, Task
 
+    if nargin < 5
+        print_coord_steps_flag = false;
+    end
+
     % Numerical tolerance
     tol = 1e-6;
 
@@ -306,26 +310,27 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
             last_update_flag = true;
         end
         %% Compute all variables that depends on Tw_a_s directly or indirectly with Tw_a_s' actual value
-        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf);
+        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
+
+        if print_coord_steps_flag && iteration_idx == 0
+            printSolution(dv, Agent, Task, 0, [], strcat('coordination iteration ', num2str(iteration_idx)));
+        end
 
         if last_update_flag
             break;
-        end
-
-        iteration_idx = iteration_idx + 1;
-        if nargin > 4 && print_coord_steps_flag
-            printSolution(dv, Agent, Task, 1, [], strcat('coordination iteration ', num2str(iteration_idx)));
         end
 
         %% Search the first slot to be coordinated from the remaining ones
         for s = 1:S
             for a = 1:A
                 % If S(:, a, s, :, :) || S(:, :, :, a, s) || R(:, a, s, :, :) || R(:, :, :, a, s) -> (a1, s1) is a slot to be coordinated
-                coord_type_ind = 1 * any(any(any(any(any(S_t_a1_s1_a2_s2(:, a, s, :, :)))))) + 10 * any(any(any(any(any(S_t_a1_s1_a2_s2(:, :, :, a, s)))))) + 100 * any(any(any(any(any(R_t_a1_s1_a2_s2(:, a, s, :, :)))))) + 1000 * any(any(any(any(any(R_t_a1_s1_a2_s2(:, :, :, a, s))))));
+                % Note that, as synchronizations are bidirectional, if any(S(:, a, s, :, :)), there will be also any(S(:, :, :, a, s))
+                % Note that it is possible to have at the same time any(R(:, a, s, :, :)) and any(R(:, :, :, a, s)), but not to the same other slot
+                coord_type_ind = 1 * any(any(any(S_t_a1_s1_a2_s2(:, a, s, :, :)))) + 10 * any(any(any(R_t_a1_s1_a2_s2(:, a, s, :, :)))) + 100 * any(any(any(R_t_a1_s1_a2_s2(:, :, :, a, s))));
                 if coord_type_ind
                     % Get (a2,s2) to be able to call coordinateTwoSlots for the first time (note: inside coordinateTwoSlots, (a2,s2) is computed again because at the end of the main while loop, (a,s) can change to the old (a2,s2))
                     [a2, s2] = geta2s2(a, s, A, S, coord_type_ind, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2);
-                    [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag] = coordinateTwoSlots(a, s, a2, s2, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf, tol);
+                    [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(a, s, a2, s2, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
                 end
                 if coord_type_ind
                     break;
@@ -715,7 +720,9 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
 end
 
 %% Update Tw dependent variables
-function [dv] = updateTwDependentVariables(dv, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf)
+function [dv] = updateTwDependentVariables(dv, dv_start_length, Agent, Task)
+    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+
     % Get all dv start and length information
     [start_z                   length_z                   ...
      start_x_a_t_s             length_x_a_t_s             ...
@@ -865,20 +872,16 @@ function [a2, s2] = geta2s2(a, s, A, S, coord_type_ind, S_t_a1_s1_a2_s2, R_t_a1_
     for s2 = 1:S
         for a2 = 1:A
             switch coord_type_ind
-            case {1, 11, 101, 111, 1001, 1011, 1101, 1111}
-                if any(any(S_t_a1_s1_a2_s2(:, a, s, a2, s2)))
+            case {1, 11, 101, 111}
+                if any(S_t_a1_s1_a2_s2(:, a, s, a2, s2))
                     return;
                 end
-            case {10, 110, 1010, 1110}
-                if any(any(S_t_a1_s1_a2_s2(:, a2, s2, a, s)))
+            case 10
+                if any(R_t_a1_s1_a2_s2(:, a, s, a2, s2))
                     return;
                 end
-            case 100
-                if any(any(R_t_a1_s1_a2_s2(:, a, s, a2, s2)))
-                    return;
-                end
-            case {1000, 1100}
-                if any(any(R_t_a1_s1_a2_s2(:, a2, s2, a, s)))
+            case {100, 110}
+                if any(R_t_a1_s1_a2_s2(:, a2, s2, a, s))
                     return;
                 end
             otherwise
@@ -889,7 +892,9 @@ function [a2, s2] = geta2s2(a, s, A, S, coord_type_ind, S_t_a1_s1_a2_s2, R_t_a1_
 end
 
 %% Coordinate two slots
-function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag] = coordinateTwoSlots(a, s, a2, s2, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf, tol)
+function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(a, s, a2, s2, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag)
+    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+
     % Get all dv start and length information
     [start_z                   length_z                   ...
      start_x_a_t_s             length_x_a_t_s             ...
@@ -925,11 +930,13 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
     infinite_loop_flag = false;
     coord_break_flag = false;
     while not(coord_break_flag)
-        coord_type_ind = 1 * any(any(any(any(any(S_t_a1_s1_a2_s2(:, a, s, :, :)))))) + 10 * any(any(any(any(any(S_t_a1_s1_a2_s2(:, :, :, a, s)))))) + 100 * any(any(any(any(any(R_t_a1_s1_a2_s2(:, a, s, :, :)))))) + 1000 * any(any(any(any(any(R_t_a1_s1_a2_s2(:, :, :, a, s))))));
+        % Note that, as synchronizations are bidirectional, if any(S(:, a, s, :, :)), there will be also any(S(:, :, :, a, s))
+        % Note that it is possible to have at the same time any(R(:, a, s, :, :)) and any(R(:, :, :, a, s)), but not to the same other slot
+        coord_type_ind = 1 * any(any(any(S_t_a1_s1_a2_s2(:, a, s, :, :)))) + 10 * any(any(any(R_t_a1_s1_a2_s2(:, a, s, :, :)))) + 100 * any(any(any(R_t_a1_s1_a2_s2(:, :, :, a, s))));
         % Find out the (a2, s2) that (a,s) must be coordinated with
         [a2, s2] = geta2s2(a, s, A, S, coord_type_ind, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2);
         
-        % Find the first slot to be coordinated in a2  to check if there is a previous slot to be coordinated in a2.
+        % Find the first slot to be coordinated in a2 to check if there is a previous slot to be coordinated in a2.
         if a == a2
             first_slot_coord_a2 = s2;
         else
@@ -944,11 +951,11 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
         if first_slot_coord_a2 == s2
             % Check if (a1, s1) and (a2, s2) are already coordinated
             switch coord_type_ind
-            case {1, 11, 101, 111, 1001, 1011, 1101, 1111, 10, 110, 1010, 1110}
+            case {1, 11, 101, 111}
                 time_to_wait = dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) - dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A));
-            case 100
+            case 10
                 time_to_wait = dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) - (dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) - dv((start_Te_a_s - 1) + (a2 + (s2 - 1)*A)));
-            case {1000, 1100}
+            case {100, 110}
                 time_to_wait = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) - (dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) - dv((start_Te_a_s - 1) + (a + (s - 1)*A)));
             otherwise
                 error('Missing case in switch statement.');
@@ -962,11 +969,11 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
                 coord_break_flag = true;
             elseif time_to_wait < 0
                 switch coord_type_ind
-                case {1, 11, 101, 111, 1001, 1011, 1101, 1111, 10, 110, 1010, 1110, 100}
+                case {1, 11, 101, 111, 10}
                     % "a" has to wait
                     aw = a;
                     sw = s;
-                case {1000, 1100}
+                case {100, 110}
                     % "a2" has to wait
                     aw = a2;
                     sw = s2;
@@ -975,11 +982,11 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
                 end
             else
                 switch coord_type_ind
-                case {1, 11, 101, 111, 1001, 1011, 1101, 1111, 10, 110, 1010, 1110, 100}
+                case {1, 11, 101, 111, 10}
                     % "a2" has to wait
                     aw = a2;
                     sw = s2;
-                case {1000, 1100}
+                case {100, 110}
                     % "a" has to wait
                     aw = a;
                     sw = s;
@@ -1022,60 +1029,93 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
                 end
             end
 
-            dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf);
+            dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
 
+            iteration_idx = iteration_idx + 1;
+            if print_coord_steps_flag
+                display(strcat('Coordinated slots (', num2str(a), ',', num2str(s), ') and (', num2str(a2), ',', num2str(s2), ')'));
+                printSolution(dv, Agent, Task, 0, [], strcat('coordination iteration ', num2str(iteration_idx)));
+            end
+
+            % Remove this coordination before checking if the past ones still coordinated because we may need to call again this function
             switch coord_type_ind
-            case {1, 11, 101, 111, 1001, 1011, 1101, 1111, 10, 110, 1010, 1110}
+            case {1, 11, 101, 111}
                 S_t_a1_s1_a2_s2(:, a, s, a2, s2) = 0;
                 S_t_a1_s1_a2_s2(:, a2, s2, a, s) = 0;
-            case 100
+            case 10
                 R_t_a1_s1_a2_s2(:, a, s, a2, s2) = 0;
-            case {1000, 1100}
+            case {100, 110}
                 R_t_a1_s1_a2_s2(:, a2, s2, a, s) = 0;
             otherwise
                 error('Missing case in switch statement.');
             end
 
+            % Check if this slot was already coordinated with a previous one
             % For every time (aw,sw) has been coordinated before with other slot
-             for sb = 1:S
-                 for ab = 1:A
-                     coord_type_ind_before = 1 * any(any(any(any(any(S_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb)))))) + 10 * any(any(any(any(any(S_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw)))))) + 100 * any(any(any(any(any(R_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb)))))) + 1000 * any(any(any(any(any(R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw))))));
-                     if coord_type_ind_before
-                        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf, tol);
-                     end
-                 end
-             end
-             % For every coordination already done in aw for a slot greater than sw (note: if the waiting time was applied in a previous recharge, we would find this coordination again in the following loop except for the fact that it hasn't been included in the coordinated list yet)
-             for sd = sw+1:S
-                 for sb = 1:S
-                     for ab = 1:A
-                         coord_type_ind_before = 1 * any(any(any(any(any(S_t_a1_s1_a2_s2_coordinated(:, aw, sd, ab, sb)))))) + 10 * any(any(any(any(any(S_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sd)))))) + 100 * any(any(any(any(any(R_t_a1_s1_a2_s2_coordinated(:, aw, sd, ab, sb)))))) + 1000 * any(any(any(any(any(R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sd))))));
-                         if coord_type_ind_before
-                            [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated] = coordinateAgain(aw, sd, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf, tol);
-                         end
-                     end
-                 end
-             end
+            for sb = 1:S
+                for ab = 1:A
+                % Note that, as synchronizations are bidirectional, if any(S(:, a, s, :, :)), there will be also any(S(:, :, :, a, s))
+                % Note that it is possible to have at the same time any(R(:, a, s, :, :)) and any(R(:, :, :, a, s)), but not to the same other slot
+                    coord_type_ind_before = 1 * any(S_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb)) + 10 * any(R_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb)) + 100 * any(R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw));
+                    if coord_type_ind_before
+                    [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
+                    end
+                end
+            end
 
+            % Check if there are any other coordinations already done in a future slot in the agent that waited
+            % For every coordination already done in aw for a slot greater than sw (note: if the waiting time was applied in a previous recharge, we would find this coordination again in the following loop except for the fact that it hasn't been included in the coordinated list yet)
+            for sd = sw+1:S
+                for sb = 1:S
+                    for ab = 1:A
+                        coord_type_ind_before = 1 * any(S_t_a1_s1_a2_s2_coordinated(:, aw, sd, ab, sb)) + 10 * any(R_t_a1_s1_a2_s2_coordinated(:, aw, sd, ab, sb)) + 100 * any(R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sd));
+                        if coord_type_ind_before
+                        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sd, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
+                        end
+                    end
+                end
+            end
+
+            % After checking and tuning past coordinations, check if the slots of the current coordination still coordinated
             switch coord_type_ind
-            case {1, 11, 101, 111, 1001, 1011, 1101, 1111, 10, 110, 1010, 1110}
+            case {1, 11, 101, 111}
+                tmp_time_to_wait = dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) - dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A));
+            case 10
+                tmp_time_to_wait = dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) - (dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) - dv((start_Te_a_s - 1) + (a2 + (s2 - 1)*A)));
+            case {100, 110}
+                tmp_time_to_wait = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) - (dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) - dv((start_Te_a_s - 1) + (a + (s - 1)*A)));
+            otherwise
+                error('Missing case in switch statement.');
+            end
+            if abs(tmp_time_to_wait) > tol
+                infinite_loop_flag = true;
+                break;
+            end
+
+            % Add the coordination to the coordinated list
+            switch coord_type_ind
+            case {1, 11, 101, 111}
                 S_t_a1_s1_a2_s2_coordinated(:, a, s, a2, s2) = 1;
-            case 100
+                S_t_a1_s1_a2_s2_coordinated(:, a2, s2, a, s) = 1;
+            case 10
                 R_t_a1_s1_a2_s2_coordinated(:, a, s, a2, s2) = 1;
-            case {1000, 1100}
+            case {100, 110}
                 R_t_a1_s1_a2_s2_coordinated(:, a2, s2, a, s) = 1;
             otherwise
                 error('Missing case in switch statement.');
             end
+
             % Add the info about where was the Tw applied to the map
             switch coord_type_ind
-            case {1, 11, 101, 111, 1001, 1011, 1101, 1111, 10, 110, 1010, 1110, 100}
+            case {1, 11, 101, 111, 10}
                 if flag_any_recharge && not(flag_any_coordination)
                     slot_Tw_coordinated(strcat(num2str(a),',',num2str(s),',',num2str(a2),',',num2str(s2))) = [Tw, aw, sr];
+                    slot_Tw_coordinated(strcat(num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s))) = [Tw, aw, sr];
                 else
                     slot_Tw_coordinated(strcat(num2str(a),',',num2str(s),',',num2str(a2),',',num2str(s2))) = [Tw, aw, sw];
+                    slot_Tw_coordinated(strcat(num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s))) = [Tw, aw, sw];
                 end
-            case {1000, 1100}
+            case {100, 110}
                 if flag_any_recharge && not(flag_any_coordination)
                     slot_Tw_coordinated(strcat(num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s))) = [Tw, aw, sr];
                 else
@@ -1084,6 +1124,7 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
             otherwise
                 error('Missing case in switch statement.');
             end
+
             coord_break_flag = true;
         else
             % Check if an infinite loop has been found
@@ -1100,7 +1141,9 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
 end
 
 %% Coordinate again
-function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf, tol)
+function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag)
+    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+    
     % Get all dv start and length information
     [start_z                   length_z                   ...
      start_x_a_t_s             length_x_a_t_s             ...
@@ -1131,28 +1174,32 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
      start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2 ...
      start_TeR_t_a1_s1_a2_s2   length_TeR_t_a1_s1_a2_s2      ] = extractStartLengthInformation(dv_start_length);
 
+    infinite_loop_flag = false;
+
     switch coord_type_ind_before
-    case {1, 11, 101, 111, 1001, 1011, 1101, 1111, 10, 110, 1010, 1110}
+    case {1, 11, 101, 111}
         time_to_wait = dv((start_tfin_a_s - 1) + (aw + ((sw + 1) - 1)*A)) - dv((start_tfin_a_s - 1) + (ab + ((sb + 1) - 1)*A));
-    case 100
+    case 10
         time_to_wait = dv((start_tfin_a_s - 1) + (aw + ((sw + 1) - 1)*A)) - (dv((start_tfin_a_s - 1) + (ab + ((sb + 1) - 1)*A)) - dv((start_Te_a_s - 1) + (ab + (sb - 1)*A)));
-    case {1000, 1100}
+    case {100, 110}
         time_to_wait = dv((start_tfin_a_s - 1) + (ab + ((sb + 1) - 1)*A)) - (dv((start_tfin_a_s - 1) + (aw + ((sw + 1) - 1)*A)) - dv((start_Te_a_s - 1) + (aw + (sw - 1)*A)));
     otherwise
         error('Missing case in switch statement.');
     end
     if abs(time_to_wait) > tol
-        % Add that coordination back to the pending list and Get the slot where the waiting time was applied in the old coordination
+        % Add that coordination back to the pending list and get the slot where the waiting time was applied in the old coordination
         switch coord_type_ind_before
-        case {1, 11, 101, 111, 1001, 1011, 1101, 1111, 10, 110, 1010, 1110}
+        case {1, 11, 101, 111}
             S_t_a1_s1_a2_s2(:, aw, sw, ab, sb) = 1;
+            S_t_a1_s1_a2_s2(:, ab, sb, aw, sw) = 1;
             S_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb) = 0;
+            S_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw) = 0;
             Tw_aw_sw = slot_Tw_coordinated(strcat(num2str(aw),',',num2str(sw),',',num2str(ab),',',num2str(sb)));
-        case 100
+        case 10
             R_t_a1_s1_a2_s2(:, aw, sw, ab, sb) = 1;
             R_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb) = 0;
             Tw_aw_sw = slot_Tw_coordinated(strcat(num2str(aw),',',num2str(sw),',',num2str(ab),',',num2str(sb)));
-        case {1000, 1100}
+        case {100, 110}
             R_t_a1_s1_a2_s2(:, ab, sb, aw, sw) = 1;
             R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw) = 0;
             Tw_aw_sw = slot_Tw_coordinated(strcat(num2str(ab),',',num2str(sb),',',num2str(aw),',',num2str(sw)));
@@ -1166,10 +1213,10 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
         % Make the old Tw applied to that coordination equal to 0
         dv((start_Tw_a_s - 1) + (awb + (swb - 1)*A)) = 0;
 
-        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf);
+        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
 
-        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag] = coordinateTwoSlots(aw, sw, ab, sb, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf, tol);
+        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(aw, sw, ab, sb, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
 
-        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task, A, T, S, N, R, Te_t_nf);
+        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
     end
 end
