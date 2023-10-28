@@ -57,7 +57,58 @@ function [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantSce
     end
 
     % Estimate the upper bound for the number of fragments a task is divided into
-    N = ceil((max([Task.Te]) * (1 + max([Task.Fl]) / 100)) / (min([Agent.Ft]) - max([Agent.Ft_saf]) - max(Td_a_t_t(:))));
+    N = 0;
+    for t = 1:T
+        if t ~= R
+            % Task execution time corrected with the fragmentation loses
+            aux_Te = Task(t).Te * (1 + Task(t).Fl/100);
+            % Flight time of the compatible robot that has the least flight time corrected with the displacement time and the safety flight time
+            aux_Ft = min(nonzeros(([Agent.Ft] - [Agent.Ft_saf] - max(Td_a_t_t(:))).*ismember([Agent.type], Task(t).Hr)));
+            % Correction for taking into account the task decomposability and coalition flexibility
+            % Only relayable tasks need correction, mostly N-hard ones
+            if Task(t).Relayability == 1
+                % Requested number of robot for task t
+                N_needed = Task(t).N;
+                if N_needed == 0
+                    N_needed = 1;
+                end
+
+                % Maximum number of robots that can perform task t
+                max_N = sum(ismember([Agent.type], Task(t).Hr));
+
+                % Number of robots that can perform task t and are not needed and so can be used as relays
+                exceeding_N = max_N - N_needed;
+
+                % Check if the task need relays depending on its execution time
+                if aux_Te > aux_Ft
+                    % If the task is hard and no extra robots are available, there wont be a solution
+                    % If the task is soft but there is only one robot available, there wont be a solution
+                    % Otherwise, a correction factor is computed
+                    if (exceeding_N == 0 && Task(t).N_hardness == 1) || (Task(t).N_hardness == 0 && max_N == 1)
+                        display('WARNING: There wont be a solution because there is no available robot to perform the needed relays');
+                        correction_factor = 1;
+                    elseif exceeding_N > 0
+                        correction_factor = ceil(N_needed / exceeding_N);
+                    elseif Task(t).N_hardness == 0
+                        correction_factor = ceil(N_needed / (max_N - 1));
+                    end
+                else
+                    correction_factor = 1;
+                end
+            else
+                correction_factor = 1;
+            end
+
+            % Number of fragments needed for task t
+            aux_N = ceil(correction_factor * aux_Te / (aux_Ft - Task(R).Te));
+            if aux_N > N
+                N = aux_N;
+            end
+        end
+    end
+    % Add some extra fragments for slack purposes
+    slack_N = 0;;
+    N = N + slack_N;
 
     % Calculate Te(t,nf) matrix
     Te_t_nf = ones(T,N);
@@ -84,13 +135,48 @@ function [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantSce
     S = 0;
     for t = 1:T
         if t ~= R
-            aux_N = Task(t).N;
-            if aux_N == 0
-                aux_N = 1;
+            N_needed = Task(t).N;
+            if N_needed == 0
+                N_needed = 1;
             end
-            S = S + 2 * ceil((Task(t).Te * (1 + Task(t).Fl/100) * aux_N) / (min(nonzeros(([Agent.Ft] - [Agent.Ft_saf] - max(Td_a_t_t(:))).*ismember([Agent.type], Task(t).Hr))) * sum(ismember([Agent.type], Task(t).Hr))));
+            % Task execution time corrected with the fragmentation loses and weighted by the number of robots the task needs
+            aux_Te = Task(t).Te * (1 + Task(t).Fl/100);
+            % Flight time of the compatible robot that has the least flight time corrected with the displacement time and the safety flight time
+            aux_Ft = min(nonzeros(([Agent.Ft] - [Agent.Ft_saf] - max(Td_a_t_t(:))).*ismember([Agent.type], Task(t).Hr)));
+            % Correction for taking into account the task decomposability and coalition flexibility
+            % Only relayable tasks need correction, mostly N-hard ones
+            if Task(t).Relayability == 1
+                % Maximum number of robots that can perform task t
+                max_N = sum(ismember([Agent.type], Task(t).Hr));
+
+                % Number of robots that can perform task t and are not needed and so can be used as relays
+                exceeding_N = max_N - N_needed;
+
+                % Check if the task need relays depending on its execution time
+                if aux_Te > aux_Ft
+                    % If the task is hard and no extra robots are available, there wont be a solution
+                    % If the task is soft but there is only one robot available, there wont be a solution
+                    % Otherwise, a correction factor is computed
+                    if (exceeding_N == 0 && Task(t).N_hardness == 1) || (Task(t).N_hardness == 0 && max_N - 1 == 0)
+                        display('WARNING: There wont be a solution because there is no available robot to perform the needed relays');
+                        correction_factor = 1;
+                    elseif exceeding_N > 0
+                        correction_factor = ceil(N_needed / exceeding_N);
+                    elseif Task(t).N_hardness == 0
+                        correction_factor = ceil(N_needed / (max_N - 1));
+                    end
+                end
+            else
+                correction_factor = 1;
+            end
+
+            % Number of slots needed for task t
+            S = S + ceil(correction_factor * aux_Te * N_needed / aux_Ft);
         end
     end
+    % Add some extra slots for slack purposes
+    slack_S = 0; %(T - 1);
+    S = S + slack_S;
 
     % Agent - Task compatibility
     H_a_t = zeros(A, T);
