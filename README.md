@@ -26,7 +26,7 @@ addpath(genpath('<install_dir>/task_planner'))
 You may also want to install [Gurobi](https://www.gurobi.com/) for Matlab to use it as MILP solver.
 
 ## Execution
-The main script, which implements and solves the MILP formulation, is [optimalTaskAllocator.m](src/optimalTaskAllocator.m).
+The main script, which implements and solves the MILP formulation, is [optimalTaskAllocator](src/optimalTaskAllocator.m).
 Inside this file there is a function defined as:
 ```
 function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
@@ -86,7 +86,7 @@ printSolution(sol, Agent, Task, 0, 'scenario_id', 'execution_id', fval);
 ```
 
 ## Check solution
-There also available a script, [checkSolution.m](scripts/checkSolution.m), that can be used either to check if the result if correct, if any of the soft constraints are being broken, or to manually propose a solution to the task allocation problem and see if it is a valid solution or not. This will be used in the future also to check if the heuristic proposed solutions are valid or not.
+There also available a script, [checkSolution](scripts/checkSolution.m), that can be used either to check if the result if correct, if any of the soft constraints are being broken, or to manually propose a solution to the task allocation problem and see if it is a valid solution or not. This will be used in the future also to check if the heuristic proposed solutions are valid or not.
 
 To see an example, lets say we want to check if a handmade solution for the predefined scenario number `5` is valid or not. The first step would be to load into the workspace the scenario information:
 ```
