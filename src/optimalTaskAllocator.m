@@ -21,8 +21,15 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     %   - 2. Minimize the total joint flight time: min(sum(tfin(a,S))).
     objective_function = 0;
 
-    % Solver configuration (options): 0. No output function, 1. Save best so far, 2. Stop at first valid solution.
+    % Solver configuration (options): 
+    %   - 0. No output function, display iter.
+    %   - 1. Save best so far, display off.
+    %   - 2. Stop at first valid solution, display off.
+    %   - 3. No output function, display off
     solver_config = 0;
+
+    % Tolerance
+    tol = 1e-6;
 
     % Formulation variants flags
     if nargin < 4 || isempty(formulation_variants_flags)
@@ -142,17 +149,12 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     na_min = 0;
     na_max = A;
 
-    % Minimum and maximum number of task instancies. Needed for later linearizations.
-    n_min = 0;
-    n_max = S;
-
     % Minimum and maximum task execution time. Needed for later linearizations.
     tfin_min = 0;
     tfin_max = tmax_m;
 
     % Minimum and maximum waiting time. Needed for later linearizations.
     Tw_min = 0;
-    Tw_max = tmax_m;
 
     % Minimum and maximum task flight time. Needed for later linearizations.
     Ft_min_a = 0;
@@ -221,34 +223,34 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     [dv_start_length, length_dv] = getStartLengthInformation(Agent, Task);
 
     % Get all dv start and length information
-    [start_z                   length_z                   ...
-     start_x_a_t_s             length_x_a_t_s             ...
-     start_xx_a_t_t_s          length_xx_a_t_t_s          ...
-     start_V_t                 length_V_t                 ...
-     start_n_t                 length_n_t                 ...
-     start_na_t                length_na_t                ...
-     start_nq_t                length_nq_t                ...
-     start_nq_a_t              length_nq_a_t              ...
-     start_nf_t                length_nf_t                ...
-     start_nf_t_nf             length_nf_t_nf             ...
-     start_nfx_a_nf_t_s        length_nfx_a_nf_t_s        ...
-     start_naf_t_nf            length_naf_t_nf            ...
-     start_nax_a_t_s           length_nax_a_t_s           ...
-     start_Ft_a_s              length_Ft_a_s              ...
-     start_Ftx_a_s1            length_Ftx_a_s1            ...
-     start_tfin_a_s            length_tfin_a_s            ...
-     start_tfinx_a_t_s         length_tfinx_a_t_s         ...
-     start_d_tmax_tfin_a_s     length_d_tmax_tfin_a_s     ...
-     start_s_used              length_s_used              ...
-     start_Td_a_s              length_Td_a_s              ...
-     start_Tw_a_s              length_Tw_a_s              ...
-     start_Twx_a_s             length_Twx_a_s             ...
-     start_Te_a_s              length_Te_a_s              ...
-     start_S_t_a1_s1_a2_s2     length_S_t_a1_s1_a2_s2     ...
-     start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2 ...
-     start_R_t_a1_s1_a2_s2     length_R_t_a1_s1_a2_s2     ...
-     start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2 ...
-     start_TeR_t_a1_s1_a2_s2   length_TeR_t_a1_s1_a2_s2      ] = extractStartLengthInformation(dv_start_length);
+    [start_z                  , ~                     , ...
+     start_x_a_t_s            , length_x_a_t_s        , ...
+     start_xx_a_t_t_s         , length_xx_a_t_t_s     , ...
+     start_V_t                , length_V_t            , ...
+     start_n_t                , length_n_t            , ...
+     start_na_t               , length_na_t           , ...
+     start_nq_t               , length_nq_t           , ...
+     start_nq_a_t             , length_nq_a_t         , ...
+     start_nf_t               , length_nf_t           , ...
+     start_nf_t_nf            , length_nf_t_nf        , ...
+     start_nfx_a_nf_t_s       , length_nfx_a_nf_t_s   , ...
+     start_naf_t_nf           , length_naf_t_nf       , ...
+     start_nax_a_t_s          , length_nax_a_t_s      , ...
+     start_Ft_a_s             , ~                     , ...
+     start_Ftx_a_s1           , length_Ftx_a_s1       , ...
+     start_tfin_a_s           , ~                     , ...
+     start_tfinx_a_t_s        , ~                     , ...
+     start_d_tmax_tfin_a_s    , length_d_tmax_tfin_a_s, ...
+     start_s_used             , length_s_used         , ...
+     start_Td_a_s             , length_Td_a_s         , ...
+     start_Tw_a_s             , length_Tw_a_s         , ...
+     start_Twx_a_s            , length_Twx_a_s        , ...
+     start_Te_a_s             , length_Te_a_s         , ...
+     start_S_t_a1_s1_a2_s2    , length_S_t_a1_s1_a2_s2, ...
+     start_tfinS_t_a1_s1_a2_s2, ~                     , ...
+     start_R_t_a1_s1_a2_s2    , length_R_t_a1_s1_a2_s2, ...
+     start_tfinR_t_a1_s1_a2_s2, ~                     , ...
+     start_TeR_t_a1_s1_a2_s2  , length_TeR_t_a1_s1_a2_s2] = extractStartLengthInformation(dv_start_length);
 
     % Maximum number of sparse terms per decision variable
     N_Hard_eq_sparse_terms            = (T - 1) * 1;
@@ -501,13 +503,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         end
     end
 
-    if test_flag
-        sol = [];
-        fval = 0;
-        solving_time = 0;
-        return;
-    end
-
     %% Initialize parallel pool
     if not(test_flag)
         pool = gcp;
@@ -525,6 +520,15 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     %% Equations and constraints
     last_toc = toc;
+
+    % Initial guess
+    x0 = [];
+    if recovery_flag
+        try
+            x0 = load("../mat/bestSolutionSoFar.mat");
+            x0 = x0.x;
+        end
+    end
 
     % Objective function coefficients
     f = zeros(1,length_dv);
@@ -557,6 +561,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 % na(t) = N(t) -> V(t) = 0
                 A_tmp((start_N_Hard_eq - 1) + (t - 1), (start_V_t - 1) + t) = 1;
                 Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                    error = abs(A_tmp((start_N_Hard_eq - 1) + (t - 1),:) * x0 - 0);
+                    if error > tol
+                        display(strcat('N_Hard eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                    end
+                end
             end
         end
     end
@@ -572,6 +584,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 b_tmp((start_Non_decomposable_eq - 1) + (t - 1)) = 1;
                 Aeq_double_sparse = Aeq_double_sparse + A_tmp;
                 beq_double_sparse = beq_double_sparse + b_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                    error = abs(A_tmp((start_Non_decomposable_eq - 1) + (t - 1),:) * x0 - b_tmp((start_Non_decomposable_eq - 1) + (t - 1),:));
+                    if error > tol
+                        display(strcat('Non_decomposable eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                    end
+                end
             end
         end
     end
@@ -592,6 +612,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 end
             end
             Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = abs(A_tmp((start_Td_a_s_eq - 1) + (a + (s - 1)*A),:) * x0 - 0);
+                if error > tol
+                    display(strcat('Td_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -612,6 +640,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 end
             end
             Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = abs(A_tmp((start_Te_a_s_eq - 1) + (a + (s - 1)*A),:) * x0 - 0);
+                if error > tol
+                    display(strcat('Te_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -622,6 +658,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         A_tmp((start_z_ineq - 1) + a, (start_tfin_a_s - 1) + (a + ((S + 1) - 1)*A)) = 1;
         A_tmp((start_z_ineq - 1) + a, (start_z - 1) + 1) = -1;
         A_double_sparse = A_double_sparse + A_tmp;
+
+        % Check whether the initial value meets this constraint
+        if not(isempty(x0))
+            error = A_tmp((start_z_ineq - 1) + a,:) * x0 - 0;
+            if error > tol
+                display(strcat('z ineq not met for a = ', num2str(a), ' by ', num2str(error)));
+            end
+        end
     end
 
     %% n(t): Total number of times that task t appears among all queues.
@@ -637,6 +681,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             end
         end
         Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+        % Check whether the initial value meets this constraint
+        if not(isempty(x0))
+            error = abs(A_tmp((start_n_t_eq - 1) + t,:) * x0 - 0);
+            if error > tol
+                display(strcat('n_t eq not met for t = ', num2str(t), ' by ', num2str(error)));
+            end
+        end
     end
 
     % Set nf_t_nf aux decision variable value depending on nf_t
@@ -650,6 +702,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             A_tmp((start_nf_t_nf_eq - 1) + t, (start_nf_t_nf - 1) + (t + (nf - 1)*T)) = nf;
         end
         Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+        % Check whether the initial value meets this constraint
+        if not(isempty(x0))
+            error = abs(A_tmp((start_nf_t_nf_eq - 1) + t,:) * x0 - 0);
+            if error > tol
+                display(strcat('nf_t_nf eq not met for t = ', num2str(t), ' by ', num2str(error)));
+            end
+        end
     end
 
     % nf_t_nf value shouldn't be a combination of several nf values
@@ -665,6 +725,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         b_tmp((start_nf_t_nf_eq - 1 + T) + t) = 1;
         Aeq_double_sparse = Aeq_double_sparse + A_tmp;
         beq_double_sparse = beq_double_sparse + b_tmp;
+
+        % Check whether the initial value meets this constraint
+        if not(isempty(x0))
+            error = abs(A_tmp((start_nf_t_nf_eq - 1 + T) + t,:) * x0 - b_tmp((start_nf_t_nf_eq - 1 + T) + t,:));
+            if error > tol
+                display(strcat('nf_t_nf eq not met for t = ', num2str(t), ' by ', num2str(error)));
+            end
+        end
     end
 
     % nq(t): number of queues that task t appears in.
@@ -678,6 +746,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             A_tmp((start_nq_t_eq - 1) + t, (start_nq_a_t - 1) + (a + (t - 1)*A)) = 1;
         end
         Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+        % Check whether the initial value meets this constraint
+        if not(isempty(x0))
+            error = abs(A_tmp((start_nq_t_eq - 1) + t,:) * x0 - 0);
+            if error > tol
+                display(strcat('nq_t eq not met for t = ', num2str(t), ' by ', num2str(error)));
+            end
+        end
     end
 
     % nq(a,t): aux binary variable. 1 if task t appears in Agent a's queue. 0 otherwise.
@@ -692,6 +768,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 A_tmp((start_nq_a_t_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = 1;
                 A_tmp((start_nq_a_t_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T), (start_nq_a_t - 1) + (a + (t - 1)*A)) = -1;
                 A_double_sparse = A_double_sparse + A_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                    error = A_tmp((start_nq_a_t_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T),:) * x0 - 0;
+                    if error > tol
+                        display(strcat('nq_a_t ineq not met for (a,t,s) = (', num2str(a), ', ', num2str(t), ', ', num2str(s), ') by ', num2str(error)));
+                    end
+                end
             end
         end
     end
@@ -707,6 +791,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 A_tmp((start_nq_a_t_ineq - 1 + A*T*S) + (a + (t - 1)*A), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = -1;
             end
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_nq_a_t_ineq - 1 + A*T*S) + (a + (t - 1)*A),:) * x0 - 0;
+                if error > tol
+                    display(strcat('nq_a_t ineq not met for (a,t) = (', num2str(a), ', ', num2str(t), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -718,6 +810,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             A_tmp((start_na_nq_t_ineq - 1) + t, (start_na_t - 1) + t) = 1;
             A_tmp((start_na_nq_t_ineq - 1) + t, (start_nq_t - 1) + t) = -1;
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_na_nq_t_ineq - 1) + t,:) * x0 - 0;
+                if error > tol
+                    display(strcat('na_nq_t ineq not met for t = ', num2str(t), ' by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -734,6 +834,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 A_tmp((start_na_nf_n_t_eq - 1) + t, (start_naf_t_nf - 1) + (t + (nf - 1)*T)) = nf;
             end
             Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = abs(A_tmp((start_na_nf_n_t_eq - 1) + t,:) * x0 - 0);
+                if error > tol
+                    display(strcat('na_nf_n_t eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -745,12 +853,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             A_tmp((start_naf_t_nf_ineq - 1) + (t + (nf - 1)*T), (start_nf_t_nf - 1)  + (t + (nf - 1)*T)) = na_min;
             A_tmp((start_naf_t_nf_ineq - 1) + (t + (nf - 1)*T), (start_naf_t_nf - 1) + (t + (nf - 1)*T)) = -1;
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_naf_t_nf_ineq - 1) + (t + (nf - 1)*T),:) * x0 - 0;
+                if error > tol
+                    display(strcat('naf_t_nf ineq not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 2);
             % naf_t_nf - nf(t,nf)*na_max <= 0
             A_tmp((start_naf_t_nf_ineq - 1 + 1*T*N) + (t + (nf - 1)*T), (start_naf_t_nf - 1) + (t + (nf - 1)*T)) = 1;
             A_tmp((start_naf_t_nf_ineq - 1 + 1*T*N) + (t + (nf - 1)*T), (start_nf_t_nf - 1)  + (t + (nf - 1)*T)) = - na_max;
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_naf_t_nf_ineq - 1 + 1*T*N) + (t + (nf - 1)*T),:) * x0 - 0;
+                if error > tol
+                    display(strcat('naf_t_nf ineq 1 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 3);
             b_tmp = spalloc(max_ineq, 1, 1);
@@ -761,6 +885,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             b_tmp((start_naf_t_nf_ineq - 1 + 2*T*N) + (t + (nf - 1)*T)) = na_max;
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_naf_t_nf_ineq - 1 + 2*T*N) + (t + (nf - 1)*T),:) * x0 - b_tmp((start_naf_t_nf_ineq - 1 + 2*T*N) + (t + (nf - 1)*T),:);
+                if error > tol
+                    display(strcat('naf_t_nf ineq 2 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 3);
             b_tmp = spalloc(max_ineq, 1, 1);
@@ -771,6 +903,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             b_tmp((start_naf_t_nf_ineq - 1 + 3*T*N) + (t + (nf - 1)*T)) = - na_min;
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_naf_t_nf_ineq - 1 + 3*T*N) + (t + (nf - 1)*T),:) * x0 - b_tmp((start_naf_t_nf_ineq - 1 + 3*T*N) + (t + (nf - 1)*T),:);
+                if error > tol
+                    display(strcat('naf_t_nf ineq 3 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -792,6 +932,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             A_tmp((start_d_tmax_tfin_a_s_ineq - 1) + (a + (s - 1)*A), (start_d_tmax_tfin_a_s - 1) + (a + (s - 1)*A)) = -1;
             % Add the new row and independent term to the corresponding matrix
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_d_tmax_tfin_a_s_ineq - 1) + (a + (s - 1)*A),:) * x0 - 0;
+                if error > tol
+                    display(strcat('d_tmax_tfin_a_s_nf ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -811,6 +959,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             A_tmp((start_t_fin_a_s_eq - 1 + A) + (a + (s - 1)*A), (start_Tw_a_s - 1) + (a + (s - 1)*A)) = 1;
             A_tmp((start_t_fin_a_s_eq - 1 + A) + (a + (s - 1)*A), (start_Te_a_s - 1) + (a + (s - 1)*A)) = 1;
             Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = abs(A_tmp((start_t_fin_a_s_eq - 1 + A) + (a + (s - 1)*A),:) * x0 - 0);
+                if error > tol
+                    display(strcat('t_fin_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -826,6 +982,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             % Add the new row and independent term to the corresponding matrix
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_Ft_a_s_ineq - 1) + (a + (s - 1)*A),:) * x0 - b_tmp((start_Ft_a_s_ineq - 1) + (a + (s - 1)*A),:);
+                if error > tol
+                    display(strcat('Ft_a_s ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -851,6 +1015,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         Aeq_double_sparse = Aeq_double_sparse + A_tmp;
         beq_double_sparse = beq_double_sparse + b_tmp;
 
+        % Check whether the initial value meets this constraint
+        if not(isempty(x0))
+            error = abs(A_tmp((start_Ft_a_s_eq - 1) + a,:) * x0 - b_tmp((start_Ft_a_s_eq - 1) + a,:));
+            if error > tol
+                display(strcat('Ft_a_s eq not met for a = ', num2str(a), ' by ', num2str(error)));
+            end
+        end
+
         for s = 1:S
             A_tmp = spalloc(max_eq, length_dv, (6 + (T - 1) * N * 1));
             % Ft(a,s) - Ft(a,s-1) + Ft(a,s-1)*x(a,R,s-1) - Td(a,s) - Tw(a,s) + Tw(a,s)*x(a,R,s) - sum from t = 2 to T of (sum from nf = 1 to N of (Te(t,nf)*nf(t,nf))*x(a,t,s)) = 0
@@ -871,6 +1043,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 end
             end
             Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = abs(A_tmp((start_Ft_a_s_eq - 1 + A) + (a + (s - 1)*A),:) * x0 - 0);
+                if error > tol
+                    display(strcat('Ft_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -887,6 +1067,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 b_tmp((start_V_t_eq - 1) + (t - 1)) = Task(t).N;
                 Aeq_double_sparse = Aeq_double_sparse + A_tmp;
                 beq_double_sparse = beq_double_sparse + b_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                    error = abs(A_tmp((start_V_t_eq - 1) + (t - 1),:) * x0 - b_tmp((start_V_t_eq - 1) + (t - 1),:));
+                    if error > tol
+                        display(strcat('V_t eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                    end
+                end
             end
         end
     end
@@ -903,6 +1091,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             b_tmp((start_recharge_ineq - 1) + (a + (s - 1)*A)) = 1;
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_recharge_ineq - 1) + (a + (s - 1)*A),:) * x0 - b_tmp((start_recharge_ineq - 1) + (a + (s - 1)*A),:);
+                if error > tol
+                    display(strcat('recharge ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -918,6 +1114,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 b_tmp((start_hardware_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T)) = H_a_t(a,t);
                 A_double_sparse = A_double_sparse + A_tmp;
                 b_double_sparse = b_double_sparse + b_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                    error = A_tmp((start_hardware_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T),:) * x0 - b_tmp((start_hardware_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T),:);
+                    if error > tol
+                        display(strcat('hardware ineq not met for (a,t,s) = (', num2str(a), ', ', num2str(t), ', ', num2str(s), ') by ', num2str(error)));
+                    end
+                end
             end
         end
     end
@@ -933,6 +1137,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             b_tmp((start_max1task_ineq - 1) + (a + (s - 1)*A)) = 1;
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_max1task_ineq - 1) + (a + (s - 1)*A),:) * x0 - b_tmp((start_max1task_ineq - 1) + (a + (s - 1)*A),:);
+                if error > tol
+                    display(strcat('max1task ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -945,6 +1157,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             A_tmp((start_continuity_ineq - 1) + (a + ((s-1) - 1)*A), (start_x_a_t_s - 1) + (a + ((1 + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)):A:(start_x_a_t_s - 1) + (a + ((T + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = 1;
             A_tmp((start_continuity_ineq - 1) + (a + ((s-1) - 1)*A), (start_x_a_t_s - 1) + (a + ((1 + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1)):A:(start_x_a_t_s - 1) + (a + ((T + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1))) = -1;
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+                error = A_tmp((start_continuity_ineq - 1) + (a + ((s-1) - 1)*A),:) * x0 - 0;
+                if error > tol
+                    display(strcat('continuity ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -960,6 +1180,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     b_tmp((start_s_used_eq - 1) + 1) = A;
     Aeq_double_sparse = Aeq_double_sparse + A_tmp;
     beq_double_sparse = beq_double_sparse + b_tmp;
+
+    % Check whether the initial value meets this constraint
+    if not(isempty(x0))
+        error = abs(A_tmp((start_s_used_eq - 1) + 1,:) * x0 - b_tmp((start_s_used_eq - 1) + 1,:));
+        if error > tol
+            display('s_used eq not met by ', num2str(error)');
+        end
+    end
 
     %% Synchronization constraints
     parfor t = 1:T
@@ -979,6 +1207,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_synch_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_synch_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                        error = A_tmp((start_synch_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('synch ineq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % S(t,a1,s1,a2,s2) - x(a2,t,s2) <= 0
@@ -986,15 +1222,31 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_synch_ineq - 1 + 1*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_x_a_t_s - 1) + (a2 + ((t + 1) - 1)*A + ((s2 + 1) - 1)*A*(T+1))) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
 
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                        error = A_tmp((start_synch_ineq - 1 + 1*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('synch ineq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
+
                                     % Synchronizations time coordination
                                     % tfin(a1,s1)*S(t,a1,s1,a2,s2) = tfin(a2,s2)*S(t,a1,s1,a2,s2), for all t in [2,T], a1,a2 in A, s1,s2 in S, a1 != a2
                                     % tfin(a1,s1)*S(t,a1,s1,a2,s2) -> tfinS(1,t,a1,s1,a2,s2)
                                     % tfin(a2,s2)*S(t,a1,s1,a2,s2) -> tfinS(2,t,a1,s1,a2,s2)
                                     A_tmp = spalloc(max_eq, length_dv, 2);
-                                    % tfin(a1,s1)*S(t,a1,s1,a2,s2) - tfin(a2,s2)*S(t,a1,s1,a2,s2) = 0
+                                    % tfinS(1,t,a1,s1,a2,s2) - tfinS(2,t,a1,s1,a2,s2) = 0
                                     A_tmp((start_synch_eq - 1 + ((T - 1) * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_synch_eq - 1 + ((T - 1) * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
                                     Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+                                    
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                        error = abs(A_tmp((start_synch_eq - 1 + ((T - 1) * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0);
+                                        if error > tol
+                                            display(strcat('synch eq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
 
                                     % Add constraints to force the value of the tfinS(i,t,a1,s1,a2,s2) aux variable to be the same as its original hight order terms.
                                     % tfin(a1,s1)*S(t,a1,s1,a2,s2) -> tfinS(1,t,a1,s1,a2,s2)
@@ -1003,12 +1255,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_synch_ineq - 1 + 2*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_min;
                                     A_tmp((start_synch_ineq - 1 + 2*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                        error = A_tmp((start_synch_eq - 1 + ((T - 1) * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('synch ineq 2 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % tfinS(1,t,a1,s1,a2,s2) - S(t,a1,s1,a2,s2)*tfin_max <= 0
                                     A_tmp((start_synch_ineq - 1 + 3*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_synch_ineq - 1 + 3*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                        error = A_tmp((start_synch_ineq - 1 + 3*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('synch ineq 3 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1020,6 +1288,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
 
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                        error = A_tmp((start_synch_ineq - 1 + 4*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_synch_ineq - 1 + 4*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('synch ineq 4 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
+
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
                                     % tfinS(1,t,a1,s1,a2,s2) - tfin(a1,s1) - tfin_min*S(t,a1,s1,a2,s2) <= - tfin_min
@@ -1029,6 +1305,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     b_tmp((start_synch_ineq - 1 + 5*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                        error = A_tmp((start_synch_ineq - 1 + 5*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_synch_ineq - 1 + 5*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('synch ineq 5 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     % tfin(a2,s2)*S(t,a1,s1,a2,s2) -> tfinS(2,t,a1,s1,a2,s2)
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
@@ -1036,12 +1320,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_synch_ineq - 1 + 6*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_min;
                                     A_tmp((start_synch_ineq - 1 + 6*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                        error = A_tmp((start_synch_ineq - 1 + 6*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('synch ineq 6 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % tfinS(2,t,a1,s1,a2,s2) - S(t,a1,s1,a2,s2)*tfin_max <= 0
                                     A_tmp((start_synch_ineq - 1 + 7*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_synch_ineq - 1 + 7*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_synch_ineq - 1 + 7*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('synch ineq 7 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1052,6 +1352,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     b_tmp((start_synch_ineq - 1 + 8*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_synch_ineq - 1 + 8*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_synch_ineq - 1 + 8*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('synch ineq 8 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1063,6 +1371,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
 
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_synch_ineq - 1 + 9*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_synch_ineq - 1 + 9*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('synch ineq 9 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
+
                                     % All synchronizations must be bidirectional
                                     % S(t, a1, s1, a2, s2) = S(t, a2, s2, a1, s1)
                                     % S(t, a1, s1, a2, s2) - S(t, a2, s2, a1, s1) = 0
@@ -1070,6 +1386,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_synch_eq - 1 + ((T - 1) * A * S) + ((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_synch_eq - 1 + ((T - 1) * A * S) + ((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A + (a1 - 1)*(T-1)*A*S + (s1 - 1)*(T-1)*A*S*A)) = -1;
                                     Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = abs(A_tmp((start_synch_eq - 1 + ((T - 1) * A * S) + ((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0);
+                                        if error > tol
+                                            display(strcat('synch eq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                 end
                             end
                         end
@@ -1090,6 +1414,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                             end
                         end
                         Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+                        % Check whether the initial value meets this constraint
+                        if not(isempty(x0))
+                        error = abs(A_tmp((start_synch_eq - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A),:) * x0 - 0);
+                            if error > tol
+                                display(strcat('synch eq not met for (t,a1,s1) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ') by ', num2str(error)));
+                            end
+                        end
                     end
                 end
             end
@@ -1114,12 +1446,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('relays ineq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % R(t,a1,s1,a2,s2) - x(a2,t,s2) <= 0
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 1*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 1*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_x_a_t_s - 1) + (a2 + ((t + 1) - 1)*A + ((s2 + 1) - 1)*A*(T+1))) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
+                                    
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 1*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('relays ineq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
 
                                     % Relays time coordination
                                     % tfin(a1,s1)*R(t,a1,s1,a2,s2) = (tfin(a2,s2) - Te(a2,s2))*R(t,a1,s1,a2,s2), for all t in [2,T], a1,a2 in A, s1,s2 in S, not(a1 == a2 && s1 == s2)
@@ -1133,6 +1481,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
                                     Aeq_double_sparse = Aeq_double_sparse + A_tmp;
 
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = abs(A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0);
+                                        if error > tol
+                                            display(strcat('relays eq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
+
                                     % Add constraints to force the value of the tfinR(i,t,a1,s1,a2,s2) and TeR(t,a1,s1,a2,s2) aux variables to be the same as their original hight order terms.
                                     % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
@@ -1141,12 +1497,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 2*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
                                     % Add the new row and independent term to the corresponding matrix
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 2*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('relays ineq 2 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % tfinR(t,a1,s1,a2,s2) - R(t,a1,s1,a2,s2)*tfin_max <= 0
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 3*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 3*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 3*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('relays ineq 3 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1157,6 +1529,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('relays ineq 4 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1168,18 +1548,42 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
 
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('relays ineq 5 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
+
                                     % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % R(t,a1,s1,a2,s2)*tfin_min - tfinR(2,t,a1,s1,a2,s2) <= 0
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_min;
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('relays ineq 6 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % tfinR(2,t,a1,s1,a2,s2) - R(t,a1,s1,a2,s2)*tfin_max <= 0
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 7*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 7*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 7*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('relays ineq 7 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1190,6 +1594,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = tfin_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('relays ineq 8 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1200,6 +1612,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - tfin_min;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('relays ineq 9 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
@@ -1207,12 +1627,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = Te_min;
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = -1;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('relays ineq 10 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 2);
                                     % TeR(t,a1,s1,a2,s2) - R(t,a1,s1,a2,s2)*Te_max <= 0
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 11*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = 1;
                                     A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 11*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A), (start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - Te_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 11*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
+                                        if error > tol
+                                            display(strcat('relays ineq 11 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1223,6 +1659,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = Te_max;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('relays ineq 12 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                     
                                     A_tmp = spalloc(max_ineq, length_dv, 3);
                                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1233,6 +1677,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = - Te_min;
                                     A_double_sparse = A_double_sparse + A_tmp;
                                     b_double_sparse = b_double_sparse + b_tmp;
+
+                                    % Check whether the initial value meets this constraint
+                                    if not(isempty(x0))
+                                    error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
+                                        if error > tol
+                                            display(strcat('relays ineq 13 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                        end
+                                    end
                                 end
                             end
                         end
@@ -1256,6 +1708,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                         b_tmp((start_relays_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A)) = 1;
                         A_double_sparse = A_double_sparse + A_tmp;
                         b_double_sparse = b_double_sparse + b_tmp;
+
+                        % Check whether the initial value meets this constraint
+                        if not(isempty(x0))
+                        error = A_tmp((start_relays_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A),:) * x0 - b_tmp((start_relays_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A),:);
+                            if error > tol
+                                display(strcat('relays ineq not met for (t,a1,s1) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ') by ', num2str(error)));
+                            end
+                        end
                     end
                 end
 
@@ -1276,6 +1736,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                         b_tmp((start_relays_ineq - 1 + (T-1)*A*S) + ((t-1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A)) = 1;
                         A_double_sparse = A_double_sparse + A_tmp;
                         b_double_sparse = b_double_sparse + b_tmp;
+
+                        % Check whether the initial value meets this constraint
+                        if not(isempty(x0))
+                        error = A_tmp((start_relays_ineq - 1 + (T-1)*A*S) + ((t-1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A),:) * x0 - b_tmp((start_relays_ineq - 1 + (T-1)*A*S) + ((t-1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A),:);
+                            if error > tol
+                                display(strcat('relays ineq not met for (t,a2,s2) = (', num2str(t), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                            end
+                        end
                     end
                 end
 
@@ -1298,6 +1766,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     end
                 end
                 Aeq_double_sparse = Aeq_double_sparse + A_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = abs(A_tmp((start_relays_eq - 1) + (t - 1),:) * x0 - 0);
+                    if error > tol
+                        display(strcat('relays eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                    end
+                end
             end
         end
     end
@@ -1313,12 +1789,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     A_tmp((start_linearizations_ineq - 1) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T), (start_xx_a_t_t_s - 1) + (a + ((t2 + 1) - 1)*A + (t - 1)*A*(T+1) + (s - 1)*A*(T+1)*T)) = 1;
                     A_tmp((start_linearizations_ineq - 1) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = -1;
                     A_double_sparse = A_double_sparse + A_tmp;
+
+                    % Check whether the initial value meets this constraint
+                    if not(isempty(x0))
+                    error = A_tmp((start_linearizations_ineq - 1) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T),:) * x0 - 0;
+                        if error > tol
+                            display(strcat('linearizations ineq not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)));
+                        end
+                    end
                     
                     A_tmp = spalloc(max_ineq, length_dv, 2);
                     % xx_a_t_t_s - x(a,t2,s-1) <= 0
                     A_tmp((start_linearizations_ineq - 1 + 1*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T), (start_xx_a_t_t_s - 1) + (a + ((t2 + 1) - 1)*A + (t - 1)*A*(T+1) + (s - 1)*A*(T+1)*T)) = 1;
                     A_tmp((start_linearizations_ineq - 1 + 1*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T), (start_x_a_t_s - 1) + (a + ((t2 + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1))) = -1;
                     A_double_sparse = A_double_sparse + A_tmp;
+
+                    % Check whether the initial value meets this constraint
+                    if not(isempty(x0))
+                    error = A_tmp((start_linearizations_ineq - 1 + 1*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T),:) * x0 - 0;
+                        if error > tol
+                            display(strcat('linearizations ineq 1 not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)));
+                        end
+                    end
                     
                     A_tmp = spalloc(max_ineq, length_dv, 3);
                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1329,6 +1821,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     b_tmp((start_linearizations_ineq - 1 + 2*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T)) = 1;
                     A_double_sparse = A_double_sparse + A_tmp;
                     b_double_sparse = b_double_sparse + b_tmp;
+
+                    % Check whether the initial value meets this constraint
+                    if not(isempty(x0))
+                    error = A_tmp((start_linearizations_ineq - 1 + 2*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 2*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T),:);
+                        if error > tol
+                            display(strcat('linearizations ineq 2 not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)));
+                        end
+                    end
                 end
 
                 % nf(t,nf)*x(a,t,s) -> nfx_a_nf_t_s
@@ -1338,12 +1838,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T), (start_nfx_a_nf_t_s - 1) + (a + (nf - 1)*A + (t - 1)*A*N + (s - 1)*A*N*T)) = 1;
                     A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = -1;
                     A_double_sparse = A_double_sparse + A_tmp;
+
+                    % Check whether the initial value meets this constraint
+                    if not(isempty(x0))
+                    error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T),:) * x0 - 0;
+                        if error > tol
+                            display(strcat('linearizations ineq not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                        end
+                    end
                     
                     A_tmp = spalloc(max_ineq, length_dv, 2);
                     % nfx_a_nf_t_s - nf(t,nf) <= 0
                     A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 1*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T), (start_nfx_a_nf_t_s - 1) + (a + (nf - 1)*A + (t - 1)*A*N + (s - 1)*A*N*T)) = 1;
                     A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 1*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T), (start_nf_t_nf - 1) + (t + (nf - 1)*T)) = -1;
                     A_double_sparse = A_double_sparse + A_tmp;
+
+                    % Check whether the initial value meets this constraint
+                    if not(isempty(x0))
+                    error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 1*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T),:) * x0 - 0;
+                        if error > tol
+                            display(strcat('linearizations ineq 1 not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                        end
+                    end
                     
                     A_tmp = spalloc(max_ineq, length_dv, 3);
                     b_tmp = spalloc(max_ineq, 1, 1);
@@ -1354,6 +1870,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 2*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T)) = 1;
                     A_double_sparse = A_double_sparse + A_tmp;
                     b_double_sparse = b_double_sparse + b_tmp;
+
+                    % Check whether the initial value meets this constraint
+                    if not(isempty(x0))
+                    error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 2*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 2*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T),:);
+                        if error > tol
+                            display(strcat('linearizations ineq 2 not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                        end
+                    end
                 end
 
                 % na(t)*x(a,t,s) -> nax_a_t_s
@@ -1362,12 +1886,28 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = na_min;
                 A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S), (start_nax_a_t_s - 1) + (a + (t - 1)*A + (s - 1)*A*T)) = -1;
                 A_double_sparse = A_double_sparse + A_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - 0;
+                    if error > tol
+                        display(strcat('linearizations ineq not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                    end
+                end
                 
                 A_tmp = spalloc(max_ineq, length_dv, 2);
                 % nax_a_t_s - x(a,t,s)*na_max <= 0
                 A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 1*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S), (start_nax_a_t_s - 1) + (a + (t - 1)*A + (s - 1)*A*T)) = 1;
                 A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 1*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = - na_max;
                 A_double_sparse = A_double_sparse + A_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 1*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - 0;
+                    if error > tol
+                        display(strcat('linearizations ineq 1 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                    end
+                end
                 
                 A_tmp = spalloc(max_ineq, length_dv, 3);
                 b_tmp = spalloc(max_ineq, 1, 1);
@@ -1378,6 +1918,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 2*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S)) = na_max;
                 A_double_sparse = A_double_sparse + A_tmp;
                 b_double_sparse = b_double_sparse + b_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 2*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 2*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:);
+                    if error > tol
+                        display(strcat('linearizations ineq 2 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                    end
+                end
                 
                 A_tmp = spalloc(max_ineq, length_dv, 3);
                 b_tmp = spalloc(max_ineq, 1, 1);
@@ -1389,18 +1937,42 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 A_double_sparse = A_double_sparse + A_tmp;
                 b_double_sparse = b_double_sparse + b_tmp;
 
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 3*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 3*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:);
+                    if error > tol
+                        display(strcat('linearizations ineq 3 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                    end
+                end
+
                 % tfin(a,s)*x(a,t,s) -> tfinx_a_t_s
                 A_tmp = spalloc(max_ineq, length_dv, 2);
                 % x(a,t,s)*tfin_min - tfinx_a_t_s <= 0
                 A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 4*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = tfin_min;
                 A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 4*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S), (start_tfinx_a_t_s - 1) + (a + (t - 1)*A + (s - 1)*A*T)) = -1;
                 A_double_sparse = A_double_sparse + A_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 4*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - 0;
+                    if error > tol
+                        display(strcat('linearizations ineq 4 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                    end
+                end
                 
                 A_tmp = spalloc(max_ineq, length_dv, 2);
                 % tfinx_a_t_s - x(a,t,s)*tfin_max <= 0
                 A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 5*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S), (start_tfinx_a_t_s - 1) + (a + (t - 1)*A + (s - 1)*A*T)) = 1;
                 A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 5*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S), (start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = - tfin_max;
                 A_double_sparse = A_double_sparse + A_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 5*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - 0;
+                    if error > tol
+                        display(strcat('linearizations ineq 5 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                    end
+                end
                 
                 A_tmp = spalloc(max_ineq, length_dv, 3);
                 b_tmp = spalloc(max_ineq, 1, 1);
@@ -1411,6 +1983,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 6*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S)) = tfin_max;
                 A_double_sparse = A_double_sparse + A_tmp;
                 b_double_sparse = b_double_sparse + b_tmp;
+
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 6*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 6*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:);
+                    if error > tol
+                        display(strcat('linearizations ineq 6 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                    end
+                end
                 
                 A_tmp = spalloc(max_ineq, length_dv, 3);
                 b_tmp = spalloc(max_ineq, 1, 1);
@@ -1421,20 +2001,43 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 7*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S)) = - tfin_min;
                 A_double_sparse = A_double_sparse + A_tmp;
                 b_double_sparse = b_double_sparse + b_tmp;
-            end
 
-            % Ft(a,s-1)*x(a,1,s-1) -> Ftx_a_s1
+                % Check whether the initial value meets this constraint
+                if not(isempty(x0))
+                error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 7*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 7*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:);
+                    if error > tol
+                        display(strcat('linearizations ineq 7 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                    end
+                end
+            end
+            
             A_tmp = spalloc(max_ineq, length_dv, 2);
             % x(a,1,s-1)*Ft_min_a - Ftx_a_s1 <= 0
             A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T)) + (a + (s - 1)*A), (start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1))) = Ft_min_a;
             A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T)) + (a + (s - 1)*A), (start_Ftx_a_s1 - 1) + (a + (s - 1)*A)) = -1;
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+            error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T)) + (a + (s - 1)*A),:) * x0 - 0;
+                if error > tol
+                    display(strcat('linearizations ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 2);
             % Ftx_a_s1 - x(a,1,s-1)*Ft_max_a <= 0
             A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 1*(A*S)) + (a + (s - 1)*A), (start_Ftx_a_s1 - 1) + (a + (s - 1)*A)) = 1;
             A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 1*(A*S)) + (a + (s - 1)*A), (start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1))) = - Ft_max_a;
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+            error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 1*(A*S)) + (a + (s - 1)*A),:) * x0 - 0;
+                if error > tol
+                    display(strcat('linearizations ineq 1 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 3);
             b_tmp = spalloc(max_ineq, 1, 1);
@@ -1445,6 +2048,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 2*(A*S)) + (a + (s - 1)*A)) = Ft_max_a;
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+            error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 2*(A*S)) + (a + (s - 1)*A),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 2*(A*S)) + (a + (s - 1)*A),:);
+                if error > tol
+                    display(strcat('linearizations ineq 2 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 3);
             b_tmp = spalloc(max_ineq, 1, 1);
@@ -1456,18 +2067,42 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
 
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+            error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 3*(A*S)) + (a + (s - 1)*A),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 3*(A*S)) + (a + (s - 1)*A),:);
+                if error > tol
+                    display(strcat('linearizations ineq 3 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
+
             % Tw(a, s)*x(a,1,s) -> Twx_a_s
             A_tmp = spalloc(max_ineq, length_dv, 2);
             % x(a,1,s)*Tw_min - Twx_a_s <= 0
             A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 4*(A*S)) + (a + (s - 1)*A), (start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = Tw_min;
             A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 4*(A*S)) + (a + (s - 1)*A), (start_Twx_a_s - 1) + (a + (s - 1)*A)) = -1;
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+            error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 4*(A*S)) + (a + (s - 1)*A),:) * x0 - 0;
+                if error > tol
+                    display(strcat('linearizations ineq 4 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 2);
             % Twx_a_s - x(a,1,s)*Tw_max <= 0
             A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 5*(A*S)) + (a + (s - 1)*A), (start_Twx_a_s - 1) + (a + (s - 1)*A)) = 1;
             A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 5*(A*S)) + (a + (s - 1)*A), (start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) = - Tw_max;
             A_double_sparse = A_double_sparse + A_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+            error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 5*(A*S)) + (a + (s - 1)*A),:) * x0 - 0;
+                if error > tol
+                    display(strcat('linearizations ineq 5 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 3);
             b_tmp = spalloc(max_ineq, 1, 1);
@@ -1478,6 +2113,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 6*(A*S)) + (a + (s - 1)*A)) = Tw_max;
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+            error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 6*(A*S)) + (a + (s - 1)*A),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 6*(A*S)) + (a + (s - 1)*A),:);
+                if error > tol
+                    display(strcat('linearizations ineq 6 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
             
             A_tmp = spalloc(max_ineq, length_dv, 3);
             b_tmp = spalloc(max_ineq, 1, 1);
@@ -1488,6 +2131,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 7*(A*S)) + (a + (s - 1)*A)) = - Tw_min;
             A_double_sparse = A_double_sparse + A_tmp;
             b_double_sparse = b_double_sparse + b_tmp;
+
+            % Check whether the initial value meets this constraint
+            if not(isempty(x0))
+            error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 7*(A*S)) + (a + (s - 1)*A),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 7*(A*S)) + (a + (s - 1)*A),:);
+                if error > tol
+                    display(strcat('linearizations ineq 7 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                end
+            end
         end
     end
 
@@ -1522,14 +2173,34 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         return;
     end
 
-    % Initial guess (this case, empty initial guess)
-    if recovery_flag
-        x0 = load("../mat/bestSolutionSoFar.mat");
-        x0 = x0.x;
-    else
-        x0 = [];
+    % If a handmade or previous solution is loaded, check if it's valid
+    if recovery_flag && not(isempty(x0))
+        try
+            result_eq = ismembertol(Aeq_double_sparse * x0, full(beq_double_sparse), tol);
+            result_ineq = A_double_sparse * x0 <= full(b_double_sparse) + tol;
+
+            eq_not_met = find(~result_eq);
+            ineq_not_met = find(~result_ineq);
+
+            if not(isempty(eq_not_met)) || not(isempty(ineq_not_met))
+                warning('x0 is infeasible');
+
+                % display(eq_not_met);
+                % display(ineq_not_met);
+
+                sol = [];
+                fval = 0;
+                return;
+            end
+        end
     end
 
+    if test_flag
+        sol = [];
+        fval = 0;
+        return;
+    end
+    
     % Solver call
     [sol, fval, exitflag, output] = intlinprog(f, intcon, A_double_sparse, b_double_sparse, Aeq_double_sparse, beq_double_sparse, lb, ub, x0, options);
     save(strcat("../mat/sol_", execution_id, ".mat"), 'sol');
@@ -1552,7 +2223,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         sol(intcon) = round(sol(intcon));
 
         % Substitute virtual zeros by exact zeros in the sol vector
-        tol = 1e-6;
         sol(abs(sol) < tol) = 0;
 
         % Decompose fval into each objective function term associated fval
@@ -1612,10 +2282,10 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             switch objective_function
             case 2
                 % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-                [fval fval_f1 fval_f2 fval_f3 fval_f4]
+                display([fval fval_f1 fval_f2 fval_f3 fval_f4]);
             otherwise
                 % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
-                [fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5]
+                display([fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5]);
             end
         end
     end

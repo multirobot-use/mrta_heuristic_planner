@@ -1,6 +1,6 @@
 function [z_max, tmax_m, Tw_max, V_max, d_tmax_max, s_used_max] = getNormalizationWeights(Agent, Task)
     % Get constant scenario information values
-    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+    [Agent, Task, A, T, S, ~, R, Td_a_t_t, ~, ~] = getConstantScenarioValues(Agent, Task);
     
     % z is normalized by scaling its value between the theoretical maximum and minimum value for the total execution time.
     % The minimum value is not 0, but for simplicity, it will be considered as 0.

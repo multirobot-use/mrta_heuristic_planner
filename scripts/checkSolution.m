@@ -550,6 +550,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
 
     % Synchronizations time coordination
     % tfin(a1,s1)*S(t,a1,s1,a2,s2) == tfin(a2,s2)*S(t,a1,s1,a2,s2), for all t in [2,T], a1,a2 in A, s1,s2 in S, a1 != a2
+    % tfinS(1,t,a1,s1,a2,s2) == tfinS(2,t,a1,s1,a2,s2)
     %* Depends on: tfinS_t_a1_s1_a2_s2
     for t = 1:T
         if t ~= R
@@ -557,7 +558,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                 for s1 = 1:S
                     for a2 = a1+1:A
                         for s2 = 1:S
-                            if abs(dv((start_tfinS_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) - dv((start_tfinS_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A + (a1 - 1)*(T-1)*A*S + (s1 - 1)*(T-1)*A*S*A))) > tol
+                            if abs(dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) - dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A))) > tol
                                 disp(strcat('Synchronization time coordination is not correct for t = ', num2str(t), ', agent a1 = ', num2str(a1), ', s1 = ', num2str(s1), ', a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
                                 result = false;
                             end
@@ -680,6 +681,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
 
     % Relays time coordination
     % tfin(a1,s1)*R(t,a1,s1,a2,s2) == (tfin(a2,s2) - Te(a2,s2))*R(t,a1,s1,a2,s2), for all t in [2,T], a1,a2 in A, s1,s2 in S, not(a1 == a2 && s1 == s2)
+    % tfinR(1,t,a1,s1,a2,s2) == tfinR(2,t,a1,s1,a2,s2)
     %* Depends on: tfinR_t_a1_s1_a2_s2, TeR_t_a1_s1_a2_s2
     for t = 1:T
         if t ~= R
@@ -823,15 +825,20 @@ function [dv] = updateTwDependentVariables(dv, dv_start_length, Agent, Task)
     %* Depends on: tfin_a_s, S_t_a1_s1_a2_s2
     for t = 1:T
         if t ~= R
-            for a1 = 1:A-1
-                for s1 = 1:S
-                    for a2 = a1+1:A
-                        for s2 = 1:S
-                            % tfin(a1,s1)*S(t,a1,s1,a2,s2) -> tfinS(t,a1,s1,a2,s2)
-                            dv((start_tfinS_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) * dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+            % Synchronization constraints could be applied only to tasks that have a specified number of robots
+            if Task(t).N ~= 0
+                for a1 = 1:A
+                    for s1 = 1:S
+                        for a2 = 1:A
+                            if a1 ~= a2
+                                for s2 = 1:S
+                                    % tfin(a1,s1)*S(t,a1,s1,a2,s2) -> tfinS(1,t,a1,s1,a2,s2)
+                                    dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) * dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
 
-                            % tfin(a2,s2)*S(t,a1,s1,a2,s2) -> tfinS(t,a2,s2,a1,s1)
-                            dv((start_tfinS_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A + (a1 - 1)*(T-1)*A*S + (s1 - 1)*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) * dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                    % tfin(a2,s2)*S(t,a1,s1,a2,s2) -> tfinS(2,t,a1,s1,a2,s2)
+                                    dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) * dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                end
+                            end
                         end
                     end
                 end
@@ -845,19 +852,22 @@ function [dv] = updateTwDependentVariables(dv, dv_start_length, Agent, Task)
     %* Depends on: Te_a_s, R_t_a1_s1_a2_s2
     for t = 1:T
         if t ~= R
-            for a1 = 1:A
-                for s1 = 1:S
-                    for a2 = 1:A
-                        for s2 = 1:S
-                            if not(a1 == a2 && s1 == s2)
-                                % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
-                                dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+            % Relay constraints could be applied only to relayable tasks
+            if Task(t).Relayability == 1
+                for a1 = 1:A
+                    for s1 = 1:S
+                        for a2 = 1:A
+                            for s2 = 1:S
+                                if not(a1 == a2 && s1 == s2)
+                                    % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
+                                    dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
 
-                                % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
-                                dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                    % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
+                                    dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
 
-                                % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
-                                dv((start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = dv((start_Te_a_s - 1) + (a2 + (s2 - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                    % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
+                                    dv((start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = dv((start_Te_a_s - 1) + (a2 + (s2 - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                end
                             end
                         end
                     end
