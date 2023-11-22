@@ -1,4 +1,4 @@
-function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
+function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags, solver_config)
     % Minimum required input arguments: scenario_id, execution_id
 
     % scenario_id: numeric if predefined scenario, 0 if random, not numeric if saved scenario (saved scenario ID name)
@@ -6,6 +6,8 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % scenario size: 1x3 vector with the number of robots (A), number of tasks (T) (without counting the recharge task) and number of different types of robots (types). Used for random generated scenarios (scenario_id == 0)
     % formulation_variants_flags: 1x4 logic vector (empty to use default config: complete formulation): [recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag]
     % config_flags: 1x7 logic vector (empty to use default config): [save_flag, test_flag, solve_flag, recovery_flag, display_flag, log_file_flag, print_solution_flag]
+    % solver_config: integer to choose between different solver configurations (empty or 0 to use default)
+
     last_toc = toc;
     
     if isnumeric(scenario_id)
@@ -24,9 +26,12 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % Solver configuration (options): 
     %   - 0. No output function, display iter.
     %   - 1. Save best so far, display off.
-    %   - 2. Stop at first valid solution, display off.
-    %   - 3. No output function, display off
-    solver_config = 0;
+    %   - 2. Save best so far, display iter.
+    %   - 3. Stop at first valid solution, display off.
+    %   - 4. No output function, display off
+    if nargin < 6
+        solver_config = 0;
+    end
 
     % Tolerance
     tol = 1e-6;
@@ -2159,11 +2164,17 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         % Save best solution so far while solving
         options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @saveBestSolutionSoFar);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
     case 2
+        % Save best solution so far while solving, with iter info
+        options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @saveBestSolutionSoFar);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+    case 3
         % Stop when the first valid solution is found
         options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @stopAtFirstValidSolution);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
-    case 3
+    case 4
         % No output function, display off
         options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+    case 5
+        % Save all found integer solutions, with iter
+        options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', 1*24*60*60, 'MaxNodes', inf, 'OutputFcn', @savemilpsolutions);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
     otherwise
         % No output function
         options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
