@@ -68,7 +68,7 @@ function [Agent, Task] = scenario(A, T, types, discretized)
 
         % Generate Agents
         for i = 1:A
-            Agent(i) = struct('name', ['Agent_' num2str(i)], 'type', randi(types), 'Ft', randi([Ft_min Ft_max]), 'Ft_0', randi([0 Ft_0_max]), 'Ft_saf', Ft_saf_max, 'ts', ts, 'P0', struct('x', randi([x_min x_max]), 'y', randi([y_min y_max]), 'z', 0));
+            Agent(i) = struct('name', ['Agent_{' num2str(i) '}'], 'type', randi(types), 'Ft', randi([Ft_min Ft_max]), 'Ft_0', randi([0 Ft_0_max]), 'Ft_saf', Ft_saf_max, 'ts', ts, 'P0', struct('x', randi([x_min x_max]), 'y', randi([y_min y_max]), 'z', 0));
         end
 
         % Minimum execution/flight time (s)
@@ -81,7 +81,7 @@ function [Agent, Task] = scenario(A, T, types, discretized)
         Fl_max = 0;
 
         % Generate Tasks
-        Task(1) =  struct('name', 't_R', 'Hr', [1:types], 'Te', 5*60, 'tmax', 0, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', recharge_wp(1), 'y', recharge_wp(2), 'z', recharge_wp(3)), 'color', [0.85 0.33 0.10]);
+        Task(1) =  struct('name', 't_R', 'Hr', [1:types], 'Te', 5*60, 'tmax', 0, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', recharge_wp(1), 'y', recharge_wp(2), 'z', recharge_wp(3)), 'color', [0.85 0.33 0.10]);
         for i = 2:T+1
             % Generate hardware requirements
             Hr = [];
@@ -153,7 +153,7 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 color = [randi([0 255]) randi([0 255]) randi([0 255])]/255;
             end
 
-            Task(i) =  struct('name', ['t_' num2str(i-1)], 'Hr', Hr, 'Te', Te, 'tmax', randi([tmax_min, tmax_max]), 'N', N, 'N_hardness', N_hardness, 'Relayability', Relayability, 'Fragmentability', Fragmentability, 'Fl', randi([0 Fl_max]), 'wp', struct('x', randi([x_min x_max]), 'y', randi([y_min y_max]), 'z', randi([z_min z_max])), 'color', color);
+            Task(i) =  struct('name', ['t_{' num2str(i-1) '}'], 'Hr', Hr, 'Te', Te, 'tmax', randi([tmax_min, tmax_max]), 'N', N, 'N_hardness', N_hardness, 'Relayability', Relayability, 'Fragmentability', Fragmentability, 'nf', 1, 'Fl', randi([0 Fl_max]), 'wp', struct('x', randi([x_min x_max]), 'y', randi([y_min y_max]), 'z', randi([z_min z_max])), 'color', color);
         end
     elseif discretized
         % Robot's flight time (s)
@@ -186,14 +186,14 @@ function [Agent, Task] = scenario(A, T, types, discretized)
 
         % Generate Agents
         for i = 1:A
-            Agent(i) = struct('name', ['Agent_' num2str(i)], 'type', randi(types), 'Ft', Ft, 'Ft_0', Ft_0(randi(length(Ft_0))), 'Ft_saf', Ft_saf_max, 'ts', ts, 'P0', struct('x', randi([x_min x_max]), 'y', randi([y_min y_max]), 'z', 0));
+            Agent(i) = struct('name', ['Agent_{' num2str(i) '}'], 'type', randi(types), 'Ft', Ft, 'Ft_0', Ft_0(randi(length(Ft_0))), 'Ft_saf', Ft_saf_max, 'ts', ts, 'P0', struct('x', randi([x_min x_max]), 'y', randi([y_min y_max]), 'z', 0));
         end
 
         % Task execution time (s)
         Te_discrete = [0.35 1.25 2.5] * Ft;
 
         % Generate Tasks
-        Task(1) =  struct('name', 't_R', 'Hr', [1:types], 'Te', 5*60, 'tmax', 0, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', recharge_wp(1), 'y', recharge_wp(2), 'z', recharge_wp(3)), 'color', [0.85 0.33 0.10]);
+        Task(1) =  struct('name', 't_R', 'Hr', [1:types], 'Te', 5*60, 'tmax', 0, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', recharge_wp(1), 'y', recharge_wp(2), 'z', recharge_wp(3)), 'color', [0.85 0.33 0.10]);
         for i = 2:T+1
             % Generate hardware requirements
             Hr = [];
@@ -262,14 +262,18 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 color = [randi([0 255]) randi([0 255]) randi([0 255])]/255;
             end
 
-            Task(i) =  struct('name', ['t_' num2str(i-1)], 'Hr', Hr, 'Te', Te, 'tmax', T*Te_discrete(3), 'N', N, 'N_hardness', N_hardness, 'Relayability', Relayability, 'Fragmentability', Fragmentability, 'Fl', 0, 'wp', struct('x', randi([x_min x_max]), 'y', randi([y_min y_max]), 'z', randi([z_min z_max])), 'color', color);
+            Task(i) =  struct('name', ['t_{' num2str(i-1) '}'], 'Hr', Hr, 'Te', Te, 'tmax', T*Te_discrete(3), 'N', N, 'N_hardness', N_hardness, 'Relayability', Relayability, 'Fragmentability', Fragmentability, 'nf', 1, 'Fl', 0, 'wp', struct('x', randi([x_min x_max]), 'y', randi([y_min y_max]), 'z', randi([z_min z_max])), 'color', color);
         end
     elseif predefined
         if not(isnumeric(A))
             old_executed_random_scenario_id = A;
-            load(strcat('../mat/Agent_', old_executed_random_scenario_id, '.mat'));
-            load(strcat('../mat/Task_', old_executed_random_scenario_id, '.mat'));
+            load(['../mat/Agent_', old_executed_random_scenario_id, '.mat']);
+            load(['../mat/Task_', old_executed_random_scenario_id, '.mat']);
         else
+            if length(A) > 1
+                error('Invalid input');
+            end
+            
             predefined = A;
 
             switch predefined
@@ -281,17 +285,17 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 2, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1 2], 'Te', 5*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1],   'Te', 5*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1],   'Te', 5*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1 2], 'Te', 5*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1],   'Te', 5*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1],   'Te', 5*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 2
                 % Scenario 2: Hardware compatibility: first 2 tasks (Nr = 1) of the same type and two agents, both compatible.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 2, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1 2], 'Te', 5*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1 2], 'Te', 5*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1 2], 'Te', 5*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1 2], 'Te', 5*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1 2], 'Te', 5*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1 2], 'Te', 5*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 3
                 % Scenario 3: Recharges allowed: 2 agents and 3 non-decomposable tasks.
                 % One of the agents has initially consumed almost all his flight time, and the other has plenty of flight time left.
@@ -299,19 +303,19 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 60*60, 'Ft_0',  0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 25*60, 'Ft_0', 18*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
-                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.93 0.69 0.13]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.93 0.69 0.13]);
             case 4
                 % Scenario 4: N-hardness: 2 Agents, 1 task with Nr = 1, other with Nr soft = 2, and other with Nr hard = 2.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 6*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
-                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 7*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.93 0.69 0.13]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 6*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 7*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.93 0.69 0.13]);
             case 5
                 % Scenario 5: Relays allowed: 2 agents, 2 tasks, the longest of them, decomposable.
                 % One agent has enough battery to perform the short task or a third of the decomposable task.
@@ -320,9 +324,9 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 8*60,  'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 25*60, 'Ft_0', 9*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 6
                 % Scenario 6: Relays not-allowed: 2 agents, 2 tasks, the longest of them, decomposable.
                 % One agent has enough battery to perform the short task or a third of the decomposable task.
@@ -331,9 +335,9 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 8*60,  'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 25*60, 'Ft_0', 9*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 7
                 % Scenario 7: Synchronizations: 2 agents and 2 tasks. One task with Nr = 1, and the other with Nr = 2.
                 % We should see how the second task is executed in parallel by both agents, and how one of the agents waits for the other to finish the first task.
@@ -341,34 +345,34 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 40*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 40*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 8*60,  'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 8*60,  'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 20*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 8
                 % Scenario 8: Fragmentable N-hard task: 1 agents, 1 fragmentable task with Nr = 2, and make the agents need to recharge at least once in between.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 12*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 100, 'y', 150, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', -100, 'y', -150, 'z', 5));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  100,  'y',  150,  'z', 0), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 30*60, 'tmax', 60*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', 100,  'y',  150,  'z', 0), 'color', [0.00 0.45 0.74]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  100,  'y',  150,  'z', 0), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 30*60, 'tmax', 60*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', 100,  'y',  150,  'z', 0), 'color', [0.00 0.45 0.74]);
             case 9
                 % Scenario 9: Relay: 3 agents, 1 relayable task with Nr = 2 that need to be relayed once or twice.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 10*60, 'Ft_0', 8*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 10*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 40*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 25*60, 'tmax', 30*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 25*60, 'tmax', 30*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
             case 10
                 % Scenario 10: N-hardness: like 4 but now with an extra task with hard N = 1.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 40*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 40*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 6*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
-                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 7*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.93 0.69 0.13]);
-                Task(5) = struct('name', 't_4', 'Hr', [1], 'Te', 8*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.45 0.00 0.74]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 6*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 7*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.93 0.69 0.13]);
+                Task(5) = struct('name', 't_4', 'Hr', [1], 'Te', 8*60, 'tmax', 50*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.45 0.00 0.74]);
             case 11
                 % Scenario 11: 2 Agents (2 type 1), 3 Tasks (Recharge, Task_1, Task_2)
                 % Test synchronization and relays. N-hard, N-soft, Relayable, Non-relayable
@@ -376,9 +380,9 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 55*60, 'Ft_0',  0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 15*60, 'Ft_0', 10*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 152*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,   'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 5*60,   'tmax', 50*60, 'N', 2, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 152*60, 'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,   'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 5*60,   'tmax', 50*60, 'N', 2, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 12
                 % Scenario 12: 3 Agents (3 type 1), 4 Tasks (Recharge, Task_1, Task_2, Task_3)
                 % Test N hardness
@@ -386,38 +390,38 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 25*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 30*60, 'Ft_0', 5*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 2*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 45*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
-                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 15*60, 'tmax', 60*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -6,  'y',  10, 'z', 2), 'color', [0.93 0.69 0.13]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 2*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 45*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 15*60, 'tmax', 60*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -6,  'y',  10, 'z', 2), 'color', [0.93 0.69 0.13]);
             case 13
                 % Scenario 13: 2 Agents (2 type 1), 3 Tasks (Recharge, Task_1, Task_2)
                 % Test if we can remove T dimension from synchronization and relays variables. Check if both implementations return the same results and if the use of memory is better.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 25*60, 'Ft_0',  0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 15*60, 'Ft_0', 10*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 26*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 10*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 26*60, 'tmax', 45*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 10*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 14
                 % Scenario 14: 2 Agents (2 type 1), 3 Tasks (Recharge, Task_1, Task_2)
                 % Test checkSolution function in a scenario with crossed relays (no solution). A task longer than the other. Drawing 1.R (A1:T1,T2; A2:T2,T1) and Drawing 2 (A1:T1; A2:T1,T2,R,T1).
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 25*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 25*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 25*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 25*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 25*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 25*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 15
                 % Scenario 15: 2 Agents (2 type 1), 3 Tasks (Recharge, Task_1, Task_2)
                 % Test checkSolution function in a scenario with unfeasible relays (no solution). Short task to relay with long tasks in between. Drawing 3 (A1:T1,T3,R,T1; A2:T1,T2,R,T1).
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 25*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 25*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 2*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 35*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 35*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
-                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 20*60, 'tmax', 35*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.93 0.69 0.13]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 2*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 5*60,  'tmax', 35*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 35*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(4) = struct('name', 't_3', 'Hr', [1], 'Te', 20*60, 'tmax', 35*60, 'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.93 0.69 0.13]);
             case 16
                 % Scenario 16: 3 Agents (3 type 1), 2 Tasks (Recharge, Task_1)
                 % test Fragmentable tasks with specified N
@@ -425,8 +429,8 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 6*60,  'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 7*60,  'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
             case 17
                 % Scenario 17: 3 Agents (3 type 1), 3 Tasks (Recharge, Task_1, Task_2)
                 % Test new synch and relays code
@@ -434,9 +438,9 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 7*60,  'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 7*60,  'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 2, 'y', 2, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 3, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 3, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 18
                 % Scenario 18: 5 Agents (5 type 1), 3 Tasks (Recharge, Task_1, Task_2)
                 % Test fragmentable tasks with specified N.
@@ -446,16 +450,16 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(4) = struct('name', 'Agent_4', 'type', 1, 'Ft', 10*60, 'Ft_0', 1*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 4, 'y', 4, 'z', 0));
                 Agent(5) = struct('name', 'Agent_5', 'type', 1, 'Ft', 10*60, 'Ft_0', 3*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 5, 'y', 5, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 4, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 5*60,  'tmax', 6*60,  'N', 3, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  3,  'y',  5,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 15*60, 'tmax', 50*60, 'N', 4, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 5*60,  'tmax', 6*60,  'N', 3, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  3,  'y',  5,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 19
                 % Scenario 19: test unspecified N. We should see how t_1 is fragmented in two and executed simultaneously in both agents.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
             case 20
                 % Scenario 20: test Fragmentable task with fixed N. We should see how t_1 is fragmented in two and executed simultaneously by two grups of two agents.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
@@ -463,8 +467,8 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(4) = struct('name', 'Agent_4', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
             case 21
                 % Scenario 21: test Fragmentable task with fixed N. We should see how t_1 is fragmented in two and executed simultaneously by two grups of two agents.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 15*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
@@ -472,8 +476,8 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 20*60, 'Ft_0',  0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(4) = struct('name', 'Agent_4', 'type', 1, 'Ft', 20*60, 'Ft_0',  0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
             case 22
                 % Scenario 22: test Fragmentable task with fixed N. There is one extra task to unsincronise the groups. We should see how t_1 is fragmented in two and executed simultaneously by two grups of two agents.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
@@ -481,42 +485,42 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(4) = struct('name', 'Agent_4', 'type', 1, 'Ft', 20*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 5*60,  'tmax', 6*60,  'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  3,  'y',  5,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 2, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1], 'Te', 5*60,  'tmax', 6*60,  'N', 1, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  3,  'y',  5,  'z', 2), 'color', [0.47 0.67 0.19]);
             case 23
                 % Scenario 23: test unspecified N. We should see how t_1 is fragmented in three and executed asynchronously in both agents.
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 10*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 10*60, 'Ft_0', 5*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
-                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(1) = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
+                Task(2) = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 25*60, 'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
             case 24
                 % Scenario 24: 3 Agents (3 type 1), 4 Tasks (Recharge, Task_1, Task_2, Task_3)
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 14*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 14*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 60*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
 
-                Task(1)  = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.85 0.33 0.10]);
-                Task(2)  = struct('name', 't_1', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.00 0.45 0.74]);
-                Task(3)  = struct('name', 't_2', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.47 0.67 0.19]);
-                Task(4)  = struct('name', 't_3', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.93 0.69 0.13]);
+                Task(1)  = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.85 0.33 0.10]);
+                Task(2)  = struct('name', 't_1', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.00 0.45 0.74]);
+                Task(3)  = struct('name', 't_2', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.47 0.67 0.19]);
+                Task(4)  = struct('name', 't_3', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.93 0.69 0.13]);
             case 25
                 % Scenario 25: Te 20 min, 3 min battery residue, nf = 20, 3 consecutive fragments. F_saf = 0 for demo purposes
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 25*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 10*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
 
-                Task(1)  = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.85 0.33 0.10]);
-                Task(2)  = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 90*60, 'N', 1, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.00 0.45 0.74]);
-                Task(3)  = struct('name', 't_2', 'Hr', [1], 'Te', 14*60,  'tmax', 90*60, 'N', 1, 'N_hardness', 0, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.47 0.67 0.19]);
+                Task(1)  = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.85 0.33 0.10]);
+                Task(2)  = struct('name', 't_1', 'Hr', [1], 'Te', 20*60, 'tmax', 90*60, 'N', 1, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.00 0.45 0.74]);
+                Task(3)  = struct('name', 't_2', 'Hr', [1], 'Te', 14*60,  'tmax', 90*60, 'N', 1, 'N_hardness', 0, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.47 0.67 0.19]);
             otherwise
                 % Default scenario: 2 Agents (1 type 1, 1 type 2), 6 Tasks (Recharge, Task_1, Task_2, Task_3, Task_4, Task_5)
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 20*60, 'Ft_0', 5*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
                 Agent(2) = struct('name', 'Agent_2', 'type', 2, 'Ft', 25*60, 'Ft_0', 5*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 1, 'y', 1, 'z', 0));
 
-                Task(1) = struct('name', 't_R', 'Hr', [1 2], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0,  'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
-                Task(2) = struct('name', 't_1', 'Hr', [1],   'Te', 15*60, 'tmax', 45*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0,  'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 't_2', 'Hr', [1 2], 'Te', 25*60, 'tmax', 30*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'Fl', 0,  'wp', struct('x',  13, 'y', -2,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(1) = struct('name', 't_R', 'Hr', [1 2], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'nf', 1, 'Fl', 0,  'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10]);
+                Task(2) = struct('name', 't_1', 'Hr', [1],   'Te', 15*60, 'tmax', 45*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'nf', 1, 'Fl', 0,  'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 't_2', 'Hr', [1 2], 'Te', 25*60, 'tmax', 30*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 1, 'nf', 1, 'Fl', 0,  'wp', struct('x',  13, 'y', -2,  'z', 2), 'color', [0.47 0.67 0.19]);
             end
         end
     else

@@ -27,7 +27,7 @@ function previewScenario(Agent, Task, scenario_id)
         initial_flight_time = barh(a - barWidth/4, [Agent(a).Ft_0, Agent(a).Ft - Agent(a).Ft_0], barWidth/2,'stacked', 'LineWidth', 1.5, 'FaceColor', color);
 
         % Add agent type
-        text(word_length/2, flight_time(1).XEndPoints + flight_time(1).BarWidth/4, strcat('Type: ', num2str(Agent(a).type)), 'FontSize', 12, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+        text(word_length/2, flight_time(1).XEndPoints + flight_time(1).BarWidth/4, ['Type: ', num2str(Agent(a).type)], 'FontSize', 12, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
         
         % Change consumed flight time color to grey
         if Agent(a).Ft_0 ~= 0
@@ -61,8 +61,8 @@ function previewScenario(Agent, Task, scenario_id)
             else
                 soft_hard = 'hard';
             end
-            text(word_length/2, execution_time(1).XEndPoints + execution_time(1).BarWidth/4, strcat('Hr: ', num2str(Task(t).Hr)), 'FontSize', 12, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-            text(word_length/2, execution_time(1).XEndPoints - execution_time(1).BarWidth/4, strcat('N ', soft_hard, ':', num2str(Task(t).N)), 'FontSize', 12, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+            text(word_length/2, execution_time(1).XEndPoints + execution_time(1).BarWidth/4, ['Hr: ', num2str(Task(t).Hr)], 'FontSize', 12, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+            text(word_length/2, execution_time(1).XEndPoints - execution_time(1).BarWidth/4, ['N ', soft_hard, ':', num2str(Task(t).N)], 'FontSize', 12, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
         end
     end
 
@@ -97,9 +97,9 @@ function previewScenario(Agent, Task, scenario_id)
     % Set title
     subplot(2,1,1);
     if nargin > 2 && not(isempty(scenario_id))
-        title(strcat('Preview of scenario "', strrep(scenario_id,'_','\_'), '". S= ', num2str(S), ', N= ', num2str(N),'.'));
-        saveas(gcf, strcat("../fig/preview_scenario_", scenario_id), 'fig');
+        title(['Preview of scenario "', strrep(scenario_id,'_','\_'), '". S= ', num2str(S), ', N= ', num2str(N),'.']);
+        saveas(gcf, ['../fig/preview_scenario_', scenario_id], 'fig');
     else
-        title(strcat('Scenario preview. S= ', num2str(S), ', N= ', num2str(N),'.'));
+        title(['Scenario preview. S= ', num2str(S), ', N= ', num2str(N),'.']);
     end
 end

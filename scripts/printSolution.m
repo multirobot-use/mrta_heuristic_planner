@@ -8,6 +8,9 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
     if not(isempty(sol))
         tol = 1e-6;
 
+        % Substitute virtual zeros by exact zeros in the sol vector
+        sol(abs(sol) < tol) = 0;
+
         % Get scenario information
         [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
@@ -152,7 +155,7 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
             title('Mission plan.');
         case 5
             if not(isempty(scenario_id))
-                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.'));
+                title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.']);
             else
                 title('Mission plan.');
             end
@@ -160,26 +163,26 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
             if isempty(execution_id) && isempty(scenario_id)
                 title('Mission plan.');
             elseif isempty(execution_id) && not(isempty(scenario_id))
-                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.'));
+                title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.']);
             elseif not(isempty(execution_id)) && isempty(scenario_id)
-                title(strcat('Mission plan (', strrep(execution_id,'_','\_'), ').'));
+                title(['Mission plan (', strrep(execution_id,'_','\_'), ').']);
             else
-                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '(', strrep(execution_id,'_','\_'), ').'));
+                title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '(', strrep(execution_id,'_','\_'), ').']);
             end
         case 7
             if isempty(execution_id) && isempty(scenario_id)
-                title(strcat('Mission plan. fval: ', num2str(fval), '.'));
+                title(['Mission plan. fval: ', num2str(fval), '.']);
             elseif isempty(execution_id) && not(isempty(scenario_id))
-                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '. fval: ', num2str(fval), '.'));
+                title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '. fval: ', num2str(fval), '.']);
             elseif not(isempty(execution_id)) && isempty(scenario_id)
-                title(strcat('Mission plan (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval), '.'));
+                title(['Mission plan (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval), '.']);
             else
-                title(strcat('Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '(', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval)));
+                title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '(', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval)]);
             end
         end
         
         if nargin > 5 && not(isempty(execution_id))
-            saveas(gcf, strcat("../fig/", execution_id), 'fig');
+            saveas(gcf, ['../fig/', execution_id], 'fig');
         end
     end
 end

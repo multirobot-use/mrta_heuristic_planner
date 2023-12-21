@@ -1,11 +1,12 @@
-function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags, solver_config)
+function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, objective_function, formulation_variants_flags, config_flags, solver_config)
     % Minimum required input arguments: scenario_id, execution_id
 
     % scenario_id: numeric if predefined scenario, 0 if random, not numeric if saved scenario (saved scenario ID name)
     % execution_id: used in log file and as file sufix to save data in case we want to save the results
     % scenario size: 1x3 vector with the number of robots (A), number of tasks (T) (without counting the recharge task) and number of different types of robots (types). Used for random generated scenarios (scenario_id == 0)
+    % objective_function: integer parameter to choose between different predefined objective functions.
     % formulation_variants_flags: 1x4 logic vector (empty to use default config: complete formulation): [recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag]
-    % config_flags: 1x7 logic vector (empty to use default config): [save_flag, test_flag, solve_flag, recovery_flag, display_flag, log_file_flag, print_solution_flag]
+    % config_flags: 1x8 logic vector (empty to use default config): [solve_flag, initialize_flag, print_solution_flag, display_flag, log_file_flag, save_flag, test_flag, recovery_flag]
     % solver_config: integer to choose between different solver configurations (empty or 0 to use default)
 
     last_toc = toc;
@@ -21,7 +22,13 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % Objective function (options):
     %   - 1. Minimize the longest queue's execution time: min(max(tfin(a,S))).
     %   - 2. Minimize the total joint flight time: min(sum(tfin(a,S))).
-    objective_function = 0;
+    %   - 3. Same as 1. but without used slots term.
+    %   - 4. Combination of 1 and 2. Use parameters alpha and betta to give more importance to one over another.
+    if nargin < 4 || isempty(objective_function)
+        objective_function = 1;
+    end
+    alpha = 0.8;
+    betta = 1 - alpha;
 
     % Solver configuration (options): 
     %   - 0. No output function, display iter.
@@ -29,7 +36,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     %   - 2. Save best so far, display iter.
     %   - 3. Stop at first valid solution, display off.
     %   - 4. No output function, display off
-    if nargin < 6
+    if nargin < 7 || isempty(solver_config)
         solver_config = 0;
     end
 
@@ -37,7 +44,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     tol = 1e-6;
 
     % Formulation variants flags
-    if nargin < 4 || isempty(formulation_variants_flags)
+    if nargin < 5 || isempty(formulation_variants_flags)
         % Use complete formulation
         recharges_allowed_flag                 = true;
         relays_allowed_flag                    = true;
@@ -51,9 +58,10 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     end
 
     % Configuration flags
-    if nargin < 5 || isempty(config_flags)
+    if nargin < 6 || isempty(config_flags)
         % Use default values
         solve_flag                             = true;
+        initialize_flag                        = true;
         print_solution_flag                    = false;
         display_flag                           = false;
         log_file_flag                          = false;
@@ -100,7 +108,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             execution_id = char(datetime('now','Format','yyyy_MM_dd_HH_mm'));
         end
         if log_file_flag
-            fprintf(logFile, "%s\n\n", strcat("Execution ID: ", execution_id));
+            fprintf(logFile, '%s\n\n', ['Execution ID: ', execution_id]);
         end
     end
 
@@ -122,8 +130,8 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Save Agent and Task
     if save_flag
-        save(strcat('../mat/Agent_', execution_id, '.mat'), 'Agent');
-        save(strcat('../mat/Task_', execution_id, '.mat'), 'Task');
+        save(['../mat/Agent_', execution_id, '.mat'], 'Agent');
+        save(['../mat/Task_', execution_id, '.mat'], 'Task');
     end
 
     % N == 0 are unspecified type tasks. They are treated as fragmentable tasks:
@@ -516,10 +524,10 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         end
 
         if display_flag
-            disp(strcat("Initialization time: ", num2str(toc - last_toc), "s"));
+            disp(['Initialization time: ', num2str(toc - last_toc), ' s']);
         end
         if log_file_flag
-            fprintf(logFile, "Initialization time: %f s\n", toc - last_toc);
+            fprintf(logFile, 'Initialization time: %f s\n', toc - last_toc);
         end
     end
 
@@ -528,9 +536,24 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % Initial guess
     x0 = [];
+
+    % Call initializer
+    if initialize_flag
+        if isempty(old_executed_random_scenario_id)
+            x0 = initializer(Agent, Task);
+        else
+            x0 = initializer(old_executed_random_scenario_id);
+        end
+
+        if isempty(x0)
+            disp('Initializer wasn''t able to find a solution');
+        end
+    end
+
+    % Use a solver finded solution
     if recovery_flag
         try
-            x0 = load("../mat/bestSolutionSoFar.mat");
+            x0 = load('../mat/bestSolutionSoFar.mat');
             x0 = x0.x;
         end
     end
@@ -541,12 +564,30 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     case 2
         % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
         f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
+    case 3
+        % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+        f((start_z - 1) + 1) = 1/z_max;
+        
+        % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
+        f((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
+    case 4
+        % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+        f((start_z - 1) + 1) = alpha/z_max;
+
+        % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+        f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = betta/tmax_m;
+        
+        % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
+        f((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
     otherwise
         % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
         f((start_z - 1) + 1) = 1/z_max;
         
         % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
         f((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
+
+        % s_used: Coefficients of the term minimizing the number of used slots.
+        f((start_s_used - 1) + 1 : (start_s_used - 1) + length_s_used) = 1/s_used_max;
     end
 
     % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
@@ -554,9 +595,6 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
     f((start_d_tmax_tfin_a_s - 1) + 1 : (start_d_tmax_tfin_a_s - 1) + length_d_tmax_tfin_a_s) = 1/d_tmax_max;
-
-    % s_used: Coefficients of the term minimizing the number of used slots.
-    f((start_s_used - 1) + 1 : (start_s_used - 1) + length_s_used) = 1/s_used_max;
 
     %% N-hardness
     parfor t = 1:T
@@ -571,7 +609,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                     error = abs(A_tmp((start_N_Hard_eq - 1) + (t - 1),:) * x0 - 0);
                     if error > tol
-                        display(strcat('N_Hard eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                        disp(['N_Hard eq not met for t = ', num2str(t), ' by ', num2str(error)]);
                     end
                 end
             end
@@ -594,7 +632,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                     error = abs(A_tmp((start_Non_decomposable_eq - 1) + (t - 1),:) * x0 - b_tmp((start_Non_decomposable_eq - 1) + (t - 1),:));
                     if error > tol
-                        display(strcat('Non_decomposable eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                        disp(['Non_decomposable eq not met for t = ', num2str(t), ' by ', num2str(error)]);
                     end
                 end
             end
@@ -622,7 +660,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = abs(A_tmp((start_Td_a_s_eq - 1) + (a + (s - 1)*A),:) * x0 - 0);
                 if error > tol
-                    display(strcat('Td_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['Td_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -650,7 +688,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = abs(A_tmp((start_Te_a_s_eq - 1) + (a + (s - 1)*A),:) * x0 - 0);
                 if error > tol
-                    display(strcat('Te_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['Te_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -668,7 +706,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         if not(isempty(x0))
             error = A_tmp((start_z_ineq - 1) + a,:) * x0 - 0;
             if error > tol
-                display(strcat('z ineq not met for a = ', num2str(a), ' by ', num2str(error)));
+                disp(['z ineq not met for a = ', num2str(a), ' by ', num2str(error)]);
             end
         end
     end
@@ -691,7 +729,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         if not(isempty(x0))
             error = abs(A_tmp((start_n_t_eq - 1) + t,:) * x0 - 0);
             if error > tol
-                display(strcat('n_t eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                disp(['n_t eq not met for t = ', num2str(t), ' by ', num2str(error)]);
             end
         end
     end
@@ -712,7 +750,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         if not(isempty(x0))
             error = abs(A_tmp((start_nf_t_nf_eq - 1) + t,:) * x0 - 0);
             if error > tol
-                display(strcat('nf_t_nf eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                disp(['nf_t_nf eq not met for t = ', num2str(t), ' by ', num2str(error)]);
             end
         end
     end
@@ -735,7 +773,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         if not(isempty(x0))
             error = abs(A_tmp((start_nf_t_nf_eq - 1 + T) + t,:) * x0 - b_tmp((start_nf_t_nf_eq - 1 + T) + t,:));
             if error > tol
-                display(strcat('nf_t_nf eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                disp(['nf_t_nf eq not met for t = ', num2str(t), ' by ', num2str(error)]);
             end
         end
     end
@@ -756,7 +794,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         if not(isempty(x0))
             error = abs(A_tmp((start_nq_t_eq - 1) + t,:) * x0 - 0);
             if error > tol
-                display(strcat('nq_t eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                disp(['nq_t eq not met for t = ', num2str(t), ' by ', num2str(error)]);
             end
         end
     end
@@ -778,7 +816,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                     error = A_tmp((start_nq_a_t_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T),:) * x0 - 0;
                     if error > tol
-                        display(strcat('nq_a_t ineq not met for (a,t,s) = (', num2str(a), ', ', num2str(t), ', ', num2str(s), ') by ', num2str(error)));
+                        disp(['nq_a_t ineq not met for (a,t,s) = (', num2str(a), ', ', num2str(t), ', ', num2str(s), ') by ', num2str(error)]);
                     end
                 end
             end
@@ -801,7 +839,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_nq_a_t_ineq - 1 + A*T*S) + (a + (t - 1)*A),:) * x0 - 0;
                 if error > tol
-                    display(strcat('nq_a_t ineq not met for (a,t) = (', num2str(a), ', ', num2str(t), ') by ', num2str(error)));
+                    disp(['nq_a_t ineq not met for (a,t) = (', num2str(a), ', ', num2str(t), ') by ', num2str(error)]);
                 end
             end
         end
@@ -820,7 +858,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_na_nq_t_ineq - 1) + t,:) * x0 - 0;
                 if error > tol
-                    display(strcat('na_nq_t ineq not met for t = ', num2str(t), ' by ', num2str(error)));
+                    disp(['na_nq_t ineq not met for t = ', num2str(t), ' by ', num2str(error)]);
                 end
             end
         end
@@ -844,7 +882,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = abs(A_tmp((start_na_nf_n_t_eq - 1) + t,:) * x0 - 0);
                 if error > tol
-                    display(strcat('na_nf_n_t eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                    disp(['na_nf_n_t eq not met for t = ', num2str(t), ' by ', num2str(error)]);
                 end
             end
         end
@@ -863,7 +901,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_naf_t_nf_ineq - 1) + (t + (nf - 1)*T),:) * x0 - 0;
                 if error > tol
-                    display(strcat('naf_t_nf ineq not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                    disp(['naf_t_nf ineq not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)]);
                 end
             end
             
@@ -877,7 +915,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_naf_t_nf_ineq - 1 + 1*T*N) + (t + (nf - 1)*T),:) * x0 - 0;
                 if error > tol
-                    display(strcat('naf_t_nf ineq 1 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                    disp(['naf_t_nf ineq 1 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)]);
                 end
             end
             
@@ -895,7 +933,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_naf_t_nf_ineq - 1 + 2*T*N) + (t + (nf - 1)*T),:) * x0 - b_tmp((start_naf_t_nf_ineq - 1 + 2*T*N) + (t + (nf - 1)*T),:);
                 if error > tol
-                    display(strcat('naf_t_nf ineq 2 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                    disp(['naf_t_nf ineq 2 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)]);
                 end
             end
             
@@ -913,7 +951,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_naf_t_nf_ineq - 1 + 3*T*N) + (t + (nf - 1)*T),:) * x0 - b_tmp((start_naf_t_nf_ineq - 1 + 3*T*N) + (t + (nf - 1)*T),:);
                 if error > tol
-                    display(strcat('naf_t_nf ineq 3 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                    disp(['naf_t_nf ineq 3 not met for (t,nf) = (', num2str(t), ', ', num2str(nf), ') by ', num2str(error)]);
                 end
             end
         end
@@ -942,7 +980,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_d_tmax_tfin_a_s_ineq - 1) + (a + (s - 1)*A),:) * x0 - 0;
                 if error > tol
-                    display(strcat('d_tmax_tfin_a_s_nf ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['d_tmax_tfin_a_s_nf ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -969,7 +1007,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = abs(A_tmp((start_t_fin_a_s_eq - 1 + A) + (a + (s - 1)*A),:) * x0 - 0);
                 if error > tol
-                    display(strcat('t_fin_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['t_fin_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -992,7 +1030,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_Ft_a_s_ineq - 1) + (a + (s - 1)*A),:) * x0 - b_tmp((start_Ft_a_s_ineq - 1) + (a + (s - 1)*A),:);
                 if error > tol
-                    display(strcat('Ft_a_s ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['Ft_a_s ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -1024,7 +1062,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         if not(isempty(x0))
             error = abs(A_tmp((start_Ft_a_s_eq - 1) + a,:) * x0 - b_tmp((start_Ft_a_s_eq - 1) + a,:));
             if error > tol
-                display(strcat('Ft_a_s eq not met for a = ', num2str(a), ' by ', num2str(error)));
+                disp(['Ft_a_s eq not met for a = ', num2str(a), ' by ', num2str(error)]);
             end
         end
 
@@ -1053,7 +1091,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = abs(A_tmp((start_Ft_a_s_eq - 1 + A) + (a + (s - 1)*A),:) * x0 - 0);
                 if error > tol
-                    display(strcat('Ft_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['Ft_a_s eq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -1077,7 +1115,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                     error = abs(A_tmp((start_V_t_eq - 1) + (t - 1),:) * x0 - b_tmp((start_V_t_eq - 1) + (t - 1),:));
                     if error > tol
-                        display(strcat('V_t eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                        disp(['V_t eq not met for t = ', num2str(t), ' by ', num2str(error)]);
                     end
                 end
             end
@@ -1101,7 +1139,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_recharge_ineq - 1) + (a + (s - 1)*A),:) * x0 - b_tmp((start_recharge_ineq - 1) + (a + (s - 1)*A),:);
                 if error > tol
-                    display(strcat('recharge ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['recharge ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -1124,7 +1162,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                     error = A_tmp((start_hardware_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T),:) * x0 - b_tmp((start_hardware_ineq - 1) + (a + (t - 1)*A + (s - 1)*A*T),:);
                     if error > tol
-                        display(strcat('hardware ineq not met for (a,t,s) = (', num2str(a), ', ', num2str(t), ', ', num2str(s), ') by ', num2str(error)));
+                        disp(['hardware ineq not met for (a,t,s) = (', num2str(a), ', ', num2str(t), ', ', num2str(s), ') by ', num2str(error)]);
                     end
                 end
             end
@@ -1147,7 +1185,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_max1task_ineq - 1) + (a + (s - 1)*A),:) * x0 - b_tmp((start_max1task_ineq - 1) + (a + (s - 1)*A),:);
                 if error > tol
-                    display(strcat('max1task ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['max1task ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -1167,7 +1205,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
                 error = A_tmp((start_continuity_ineq - 1) + (a + ((s-1) - 1)*A),:) * x0 - 0;
                 if error > tol
-                    display(strcat('continuity ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['continuity ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -1190,7 +1228,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     if not(isempty(x0))
         error = abs(A_tmp((start_s_used_eq - 1) + 1,:) * x0 - b_tmp((start_s_used_eq - 1) + 1,:));
         if error > tol
-            display('s_used eq not met by ', num2str(error)');
+            disp('s_used eq not met by ', num2str(error)');
         end
     end
 
@@ -1217,7 +1255,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                         error = A_tmp((start_synch_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('synch ineq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1231,7 +1269,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                         error = A_tmp((start_synch_ineq - 1 + 1*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('synch ineq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
 
@@ -1249,7 +1287,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                         error = abs(A_tmp((start_synch_eq - 1 + ((T - 1) * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0);
                                         if error > tol
-                                            display(strcat('synch eq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch eq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
 
@@ -1265,7 +1303,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                         error = A_tmp((start_synch_eq - 1 + ((T - 1) * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('synch ineq 2 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 2 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1279,7 +1317,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                         error = A_tmp((start_synch_ineq - 1 + 3*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('synch ineq 3 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 3 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1297,7 +1335,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                         error = A_tmp((start_synch_ineq - 1 + 4*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_synch_ineq - 1 + 4*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('synch ineq 4 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 4 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
 
@@ -1315,7 +1353,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                         error = A_tmp((start_synch_ineq - 1 + 5*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_synch_ineq - 1 + 5*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('synch ineq 5 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 5 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1330,7 +1368,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                         error = A_tmp((start_synch_ineq - 1 + 6*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('synch ineq 6 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 6 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1344,7 +1382,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_synch_ineq - 1 + 7*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('synch ineq 7 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 7 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1362,7 +1400,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_synch_ineq - 1 + 8*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_synch_ineq - 1 + 8*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('synch ineq 8 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 8 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1380,7 +1418,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_synch_ineq - 1 + 9*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_synch_ineq - 1 + 9*((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('synch ineq 9 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch ineq 9 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
 
@@ -1396,7 +1434,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = abs(A_tmp((start_synch_eq - 1 + ((T - 1) * A * S) + ((T - 1) * A * S * A * S)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0);
                                         if error > tol
-                                            display(strcat('synch eq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['synch eq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                 end
@@ -1424,7 +1462,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                         if not(isempty(x0))
                         error = abs(A_tmp((start_synch_eq - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A),:) * x0 - 0);
                             if error > tol
-                                display(strcat('synch eq not met for (t,a1,s1) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ') by ', num2str(error)));
+                                disp(['synch eq not met for (t,a1,s1) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ') by ', num2str(error)]);
                             end
                         end
                     end
@@ -1456,7 +1494,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('relays ineq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1470,7 +1508,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 1*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('relays ineq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 1 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
 
@@ -1490,7 +1528,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = abs(A_tmp((start_relays_eq - 1 + (T - 1)) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0);
                                         if error > tol
-                                            display(strcat('relays eq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays eq not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
 
@@ -1507,7 +1545,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 2*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('relays ineq 2 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 2 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1521,7 +1559,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 3*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('relays ineq 3 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 3 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1539,7 +1577,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 4*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('relays ineq 4 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 4 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1557,7 +1595,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 5*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('relays ineq 5 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 5 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
 
@@ -1572,7 +1610,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 6*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('relays ineq 6 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 6 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1586,7 +1624,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 7*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('relays ineq 7 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 7 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1604,7 +1642,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 8*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('relays ineq 8 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 8 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1622,7 +1660,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 9*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('relays ineq 9 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 9 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1637,7 +1675,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 10*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('relays ineq 10 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 10 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1651,7 +1689,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 11*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - 0;
                                         if error > tol
-                                            display(strcat('relays ineq 11 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 11 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1669,7 +1707,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 12*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('relays ineq 12 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 12 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                     
@@ -1687,7 +1725,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                                     if not(isempty(x0))
                                     error = A_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:) * x0 - b_tmp((start_relays_ineq - 1 + 2*(T-1)*A*S + 13*(T-1)*A*S*A*S) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A),:);
                                         if error > tol
-                                            display(strcat('relays ineq 13 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                            disp(['relays ineq 13 not met for (t,a1,s1,a2,s2) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                                         end
                                     end
                                 end
@@ -1718,7 +1756,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                         if not(isempty(x0))
                         error = A_tmp((start_relays_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A),:) * x0 - b_tmp((start_relays_ineq - 1) + ((t-1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A),:);
                             if error > tol
-                                display(strcat('relays ineq not met for (t,a1,s1) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ') by ', num2str(error)));
+                                disp(['relays ineq not met for (t,a1,s1) = (', num2str(t), ', ', num2str(a1), ', ', num2str(s1), ') by ', num2str(error)]);
                             end
                         end
                     end
@@ -1746,7 +1784,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                         if not(isempty(x0))
                         error = A_tmp((start_relays_ineq - 1 + (T-1)*A*S) + ((t-1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A),:) * x0 - b_tmp((start_relays_ineq - 1 + (T-1)*A*S) + ((t-1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A),:);
                             if error > tol
-                                display(strcat('relays ineq not met for (t,a2,s2) = (', num2str(t), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)));
+                                disp(['relays ineq not met for (t,a2,s2) = (', num2str(t), ', ', num2str(a2), ', ', num2str(s2), ') by ', num2str(error)]);
                             end
                         end
                     end
@@ -1776,7 +1814,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = abs(A_tmp((start_relays_eq - 1) + (t - 1),:) * x0 - 0);
                     if error > tol
-                        display(strcat('relays eq not met for t = ', num2str(t), ' by ', num2str(error)));
+                        disp(['relays eq not met for t = ', num2str(t), ' by ', num2str(error)]);
                     end
                 end
             end
@@ -1799,7 +1837,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     if not(isempty(x0))
                     error = A_tmp((start_linearizations_ineq - 1) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T),:) * x0 - 0;
                         if error > tol
-                            display(strcat('linearizations ineq not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)));
+                            disp(['linearizations ineq not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)]);
                         end
                     end
                     
@@ -1813,7 +1851,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     if not(isempty(x0))
                     error = A_tmp((start_linearizations_ineq - 1 + 1*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T),:) * x0 - 0;
                         if error > tol
-                            display(strcat('linearizations ineq 1 not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)));
+                            disp(['linearizations ineq 1 not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)]);
                         end
                     end
                     
@@ -1831,7 +1869,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     if not(isempty(x0))
                     error = A_tmp((start_linearizations_ineq - 1 + 2*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 2*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + ((t2+1) - 1)*A*S*T),:);
                         if error > tol
-                            display(strcat('linearizations ineq 2 not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)));
+                            disp(['linearizations ineq 2 not met for (a,s,t,t2) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(t2), ') by ', num2str(error)]);
                         end
                     end
                 end
@@ -1848,7 +1886,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     if not(isempty(x0))
                     error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1))) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T),:) * x0 - 0;
                         if error > tol
-                            display(strcat('linearizations ineq not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                            disp(['linearizations ineq not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)]);
                         end
                     end
                     
@@ -1862,7 +1900,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     if not(isempty(x0))
                     error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 1*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T),:) * x0 - 0;
                         if error > tol
-                            display(strcat('linearizations ineq 1 not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                            disp(['linearizations ineq 1 not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)]);
                         end
                     end
                     
@@ -1880,7 +1918,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                     if not(isempty(x0))
                     error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 2*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 2*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S + (nf - 1)*A*S*T),:);
                         if error > tol
-                            display(strcat('linearizations ineq 2 not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)));
+                            disp(['linearizations ineq 2 not met for (a,s,t,nf) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ', ', num2str(nf), ') by ', num2str(error)]);
                         end
                     end
                 end
@@ -1896,7 +1934,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - 0;
                     if error > tol
-                        display(strcat('linearizations ineq not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                        disp(['linearizations ineq not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)]);
                     end
                 end
                 
@@ -1910,7 +1948,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 1*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - 0;
                     if error > tol
-                        display(strcat('linearizations ineq 1 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                        disp(['linearizations ineq 1 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)]);
                     end
                 end
                 
@@ -1928,7 +1966,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 2*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 2*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:);
                     if error > tol
-                        display(strcat('linearizations ineq 2 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                        disp(['linearizations ineq 2 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)]);
                     end
                 end
                 
@@ -1946,7 +1984,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 3*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 3*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:);
                     if error > tol
-                        display(strcat('linearizations ineq 3 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                        disp(['linearizations ineq 3 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)]);
                     end
                 end
 
@@ -1961,7 +1999,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 4*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - 0;
                     if error > tol
-                        display(strcat('linearizations ineq 4 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                        disp(['linearizations ineq 4 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)]);
                     end
                 end
                 
@@ -1975,7 +2013,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 5*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - 0;
                     if error > tol
-                        display(strcat('linearizations ineq 5 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                        disp(['linearizations ineq 5 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)]);
                     end
                 end
                 
@@ -1993,7 +2031,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 6*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 6*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:);
                     if error > tol
-                        display(strcat('linearizations ineq 6 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                        disp(['linearizations ineq 6 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)]);
                     end
                 end
                 
@@ -2011,7 +2049,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 if not(isempty(x0))
                 error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 7*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 7*(A*S*T)) + (a + (s - 1)*A + (t - 1)*A*S),:);
                     if error > tol
-                        display(strcat('linearizations ineq 7 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)));
+                        disp(['linearizations ineq 7 not met for (a,s,t) = (', num2str(a), ', ', num2str(s), ', ', num2str(t), ') by ', num2str(error)]);
                     end
                 end
             end
@@ -2026,7 +2064,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
             error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T)) + (a + (s - 1)*A),:) * x0 - 0;
                 if error > tol
-                    display(strcat('linearizations ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['linearizations ineq not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
             
@@ -2040,7 +2078,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
             error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 1*(A*S)) + (a + (s - 1)*A),:) * x0 - 0;
                 if error > tol
-                    display(strcat('linearizations ineq 1 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['linearizations ineq 1 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
             
@@ -2058,7 +2096,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
             error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 2*(A*S)) + (a + (s - 1)*A),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 2*(A*S)) + (a + (s - 1)*A),:);
                 if error > tol
-                    display(strcat('linearizations ineq 2 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['linearizations ineq 2 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
             
@@ -2076,7 +2114,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
             error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 3*(A*S)) + (a + (s - 1)*A),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 3*(A*S)) + (a + (s - 1)*A),:);
                 if error > tol
-                    display(strcat('linearizations ineq 3 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['linearizations ineq 3 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
 
@@ -2091,7 +2129,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
             error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 4*(A*S)) + (a + (s - 1)*A),:) * x0 - 0;
                 if error > tol
-                    display(strcat('linearizations ineq 4 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['linearizations ineq 4 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
             
@@ -2105,7 +2143,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
             error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 5*(A*S)) + (a + (s - 1)*A),:) * x0 - 0;
                 if error > tol
-                    display(strcat('linearizations ineq 5 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['linearizations ineq 5 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
             
@@ -2123,7 +2161,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
             error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 6*(A*S)) + (a + (s - 1)*A),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 6*(A*S)) + (a + (s - 1)*A),:);
                 if error > tol
-                    display(strcat('linearizations ineq 6 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['linearizations ineq 6 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
             
@@ -2141,7 +2179,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(x0))
             error = A_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 7*(A*S)) + (a + (s - 1)*A),:) * x0 - b_tmp((start_linearizations_ineq - 1 + 3*(A*S*T*(T+1)) + 3*(A*S*T*N) + 8*(A*S*T) + 7*(A*S)) + (a + (s - 1)*A),:);
                 if error > tol
-                    display(strcat('linearizations ineq 7 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)));
+                    disp(['linearizations ineq 7 not met for (a,s) = (', num2str(a), ', ', num2str(s), ') by ', num2str(error)]);
                 end
             end
         end
@@ -2149,10 +2187,10 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     %% Optimization
     if display_flag
-        disp(strcat("Time to build A, b, Aeq and beq matrices: ", num2str(toc - last_toc), "s"));
+        disp(['Time to build A, b, Aeq and beq matrices: ', num2str(toc - last_toc), 's']);
     end
     if log_file_flag
-        fprintf(logFile, "Time to build A, b, Aeq and beq matrices: %f s\n", toc - last_toc);
+        fprintf(logFile, 'Time to build A, b, Aeq and beq matrices: %f s\n', toc - last_toc);
     end
 
     %% Solver
@@ -2196,8 +2234,8 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             if not(isempty(eq_not_met)) || not(isempty(ineq_not_met))
                 warning('x0 is infeasible');
 
-                % display(eq_not_met);
-                % display(ineq_not_met);
+                % disp(eq_not_met);
+                % disp(ineq_not_met);
 
                 sol = [];
                 fval = 0;
@@ -2214,19 +2252,13 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     
     % Solver call
     [sol, fval, exitflag, output] = intlinprog(f, intcon, A_double_sparse, b_double_sparse, Aeq_double_sparse, beq_double_sparse, lb, ub, x0, options);
-    save(strcat("../mat/sol_", execution_id, ".mat"), 'sol');
-    save(strcat("../mat/fval_", execution_id, ".mat"), 'fval');
-    if save_flag
-        save(strcat("../mat/exitflag_", execution_id, ".mat"), 'exitflag');
-        save(strcat("../mat/output_", execution_id, ".mat"), 'output');
-    end
 
     solving_time = toc - last_toc;
     if display_flag
-        disp(strcat("Solving time: ", num2str(solving_time), "s"));
+        disp(['Solving time: ', num2str(solving_time), 's']);
     end
     if log_file_flag
-        fprintf(logFile, "Solving time: %f s\n", solving_time);
+        fprintf(logFile, 'Solving time: %f s\n', solving_time);
     end
 
     if not(isempty(sol))
@@ -2238,7 +2270,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
         % Decompose fval into each objective function term associated fval
         if log_file_flag
-            fprintf(logFile, "fval f = %f s\n", fval);
+            fprintf(logFile, 'fval f = %f s\n', fval);
         end
 
         f_term = zeros(1,length_dv);
@@ -2252,7 +2284,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         end
         fval_f1 = f_term*sol;
         if log_file_flag
-            fprintf(logFile, "fval f_1 = %f s\n", fval_f1);
+            fprintf(logFile, 'fval f_1 = %f s\n', fval_f1);
         end
 
         f_term = zeros(1,length_dv);
@@ -2260,7 +2292,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         f_term((start_V_t - 1) + 2 : (start_V_t - 1) + length_V_t) = 1/V_max;
         fval_f2 = f_term*sol;
         if log_file_flag
-            fprintf(logFile, "fval f_2 = %f s\n", fval_f2);
+            fprintf(logFile, 'fval f_2 = %f s\n', fval_f2);
         end
 
         f_term = zeros(1,length_dv);
@@ -2268,7 +2300,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         f_term((start_d_tmax_tfin_a_s - 1) + 1 : (start_d_tmax_tfin_a_s - 1) + length_d_tmax_tfin_a_s) = 1/d_tmax_max;
         fval_f3 = f_term*sol;
         if log_file_flag
-            fprintf(logFile, "fval f_3 = %f s\n", fval_f3);
+            fprintf(logFile, 'fval f_3 = %f s\n', fval_f3);
         end
 
         f_term = zeros(1,length_dv);
@@ -2276,7 +2308,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         f_term((start_s_used - 1) + 1 : (start_s_used - 1) + length_s_used) = 1/s_used_max;
         fval_f4 = f_term*sol;
         if log_file_flag
-            fprintf(logFile, "fval f_4 = %f s\n", fval_f4);
+            fprintf(logFile, 'fval f_4 = %f s\n', fval_f4);
         end
 
         if objective_function <= 1
@@ -2285,7 +2317,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             f_term((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
             fval_f5 = f_term*sol;
             if log_file_flag
-                fprintf(logFile, "fval f_5 = %f s\n", fval_f5);
+                fprintf(logFile, 'fval f_5 = %f s\n', fval_f5);
             end
         end
 
@@ -2293,17 +2325,24 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
             switch objective_function
             case 2
                 % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-                display([fval fval_f1 fval_f2 fval_f3 fval_f4]);
+                disp([fval fval_f1 fval_f2 fval_f3 fval_f4]);
             otherwise
                 % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
-                display([fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5]);
+                disp([fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5]);
             end
         end
     end
 
     % Add a spacing line at the end of each run in the log file
     if log_file_flag
-        fprintf(logFile, "\n--------------------\n");
+        fprintf(logFile, '\n--------------------\n');
+    end
+
+    save(['../mat/sol_', execution_id, '.mat'], 'sol');
+    save(['../mat/fval_', execution_id, '.mat'], 'fval');
+    if save_flag
+        save(['../mat/exitflag_', execution_id, '.mat'], 'exitflag');
+        save(['../mat/output_', execution_id, '.mat'], 'output');
     end
 
     %% Print solution
@@ -2313,7 +2352,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
     if isempty(sol) && predefined == 0 && not(save_flag)
         previewScenario(Agent, Task, scenario_id);
-        save(strcat('../mat/Agent_', execution_id, '.mat'), 'Agent');
-        save(strcat('../mat/Task_', execution_id, '.mat'), 'Task');
+        save(['../mat/Agent_', execution_id, '.mat'], 'Agent');
+        save(['../mat/Task_', execution_id, '.mat'], 'Task');
     end
 end

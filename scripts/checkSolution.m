@@ -1,14 +1,33 @@
 %% Function to check if a handmade matrix solution is correct
 %! ----------------------------------------------------------
-function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, print_coord_steps_flag)
+function [dv, fval, result] = checkSolution(sol, Agent, Task, scenario_id, execution_id, print_solution_flag, print_coord_steps_flag)
     % Minimum required inputs: sol, Agent, Task
+    % Result is true if the solution is correct, false otherwise
+    result = true;
+
+    if nargin < 4
+        scenario_id = '';
+    end
 
     if nargin < 5
+        execution_id = '';
+    end
+
+    if nargin < 6
+        print_solution_flag = true;
+    end
+
+    if nargin < 7
         print_coord_steps_flag = false;
     end
 
     % Numerical tolerance
     tol = 1e-6;
+
+    if not(isempty(sol))
+        % Substitute virtual zeros by exact zeros in the sol vector
+        sol(abs(sol) < tol) = 0;
+    end
 
     % Objective function (options):
     %   - 1. Minimize the longest queue's execution time: min(max(tfin(a,S))).
@@ -99,7 +118,9 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     S_t_a1_s1_a2_s2_coordinated = zeros(T-1, A, S, A, S);
     R_t_a1_s1_a2_s2_coordinated = zeros(T-1, A, S, A, S);
 
-    % Auxiliary variable to store where was the Tw applied and its value. key: strcat(num2str(t),',',num2str(a1),',',num2str(s1),',',num2str(a2),',',num2str(s2)), value: [Tw, aw, sw]
+    % Auxiliary variable to store where was the Tw applied and its value.
+    % Map key: [num2str(t), ',', num2str(a1), ',', num2str(s1), ',', num2str(a2), ',', num2str(s2)]
+    % Map value: [Tw, aw, sw]
     slot_Tw_coordinated = containers.Map();
 
     % Objective function coefficients
@@ -313,7 +334,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
         dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
 
         if print_coord_steps_flag && iteration_idx == 0
-            printSolution(dv, Agent, Task, 0, [], strcat('coordination iteration ', num2str(iteration_idx)));
+            printSolution(dv, Agent, Task, 0, scenario_id, ['coordination iteration ', num2str(iteration_idx)]);
         end
 
         if last_update_flag
@@ -346,7 +367,6 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     fval = f*dv;
 
     %%? Check if the solution meets the constraints
-    result = true;
 
     % N-hardness
     for t = 1:T
@@ -354,7 +374,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
             if Task(t).N_hardness
                 % na(t) = N(t) -> V(t) = 0
                 if not(abs(dv((start_V_t - 1) + t)) <= tol)
-                    disp(strcat('N-hard constraint not met for task t = ', num2str(t)));
+                    disp(['N-hard constraint not met for task t = ', num2str(t)]);
                     result = false;
                 end
             end
@@ -367,7 +387,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
             if Task(t).Relayability == 0 && Task(t).Fragmentability == 0
                 % nf(t) = 1
                 if not(abs(dv((start_nf_t - 1) + t) - 1) <= tol)
-                    disp(strcat('N-hard constraint not met for task t = ', num2str(t)));
+                    disp(['N-hard constraint not met for task t = ', num2str(t)]);
                     result = false;
                 end
             end
@@ -380,7 +400,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
         if t ~= R
             % na(t) - nq(t) <= 0
             if not(dv((start_na_t - 1) + t) - dv((start_nq_t - 1) + t) <= tol)
-                disp(strcat('na(t) <= nq(t) constraint not met for task t = ', num2str(t)));
+                disp(['na(t) <= nq(t) constraint not met for task t = ', num2str(t)]);
                 result = false;
             end
         end
@@ -392,7 +412,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     for a = 1:A
         for s = 1:S
             if not(dv((start_Ft_a_s - 1) + (a + ((s + 1) - 1)*A)) <= (Agent(a).Ft - Agent(a).Ft_saf) + tol)
-                disp(strcat('Flight time constraint not met for agent a = ', num2str(a), ' and s = ', num2str(s)));
+                disp(['Flight time constraint not met for agent a = ', num2str(a), ' and s = ', num2str(s)]);
                 result = false;
             end
         end
@@ -404,7 +424,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     for a = 1:A
         for s = 1:S
             if not(dv((start_d_tmax_tfin_a_s - 1) + (a + (s - 1)*A)) <= tol)
-                disp(strcat('t_max_a(s) exceeded for agent a = ', num2str(a), ' and s = ', num2str(s)));
+                disp(['t_max_a(s) exceeded for agent a = ', num2str(a), ' and s = ', num2str(s)]);
             end
         end
     end
@@ -416,7 +436,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
         for t = 1:1
             for s = 1:S-1
                 if not(dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) + dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + (((s+1) + 1) - 1)*A*(T+1))) <= 1 + tol)
-                    disp(strcat('"Tasks shouldn''t be assigned to the same Agent in two consecutive slots" constraint not met for agent a = ', num2str(a), ', t = ', num2str(t), ' and s = ', num2str(s)));
+                    disp(['"Tasks shouldn''t be assigned to the same Agent in two consecutive slots" constraint not met for agent a = ', num2str(a), ', t = ', num2str(t), ' and s = ', num2str(s)]);
                     result = false;
                 end
             end
@@ -430,7 +450,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
         for t = 1:T
             for s = 1:S
                 if not(dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))) <= H_a_t(a,t) + tol)
-                    disp(strcat('Hardware constraint not met for agent a = ', num2str(a), ', t = ', num2str(t), ' and s = ', num2str(s)));
+                    disp(['Hardware constraint not met for agent a = ', num2str(a), ', t = ', num2str(t), ' and s = ', num2str(s)]);
                     result = false;
                 end
             end
@@ -443,7 +463,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     for a = 1:A
         for s = 1:S
             if not(sum(dv((start_x_a_t_s - 1) + (a + ((0 + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)):A:(start_x_a_t_s - 1) + (a + ((T + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)))) <= 1 + tol)
-                disp(strcat('"Max of 1 task per slot" constraint not met for agent a = ', num2str(a), ' and s = ', num2str(s)));
+                disp(['"Max of 1 task per slot" constraint not met for agent a = ', num2str(a), ' and s = ', num2str(s)]);
                 result = false;
             end
         end
@@ -455,7 +475,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
     for a = 1:A
         for s = 2:S
             if not(sum(dv((start_x_a_t_s - 1) + (a + ((1 + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)):A:(start_x_a_t_s - 1) + (a + ((T + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)))) <= sum(dv((start_x_a_t_s - 1) + (a + ((1 + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1)):A:(start_x_a_t_s - 1) + (a + ((T + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1)))) + tol)
-                disp(strcat('Continuity constraint not met for agent a = ', num2str(a), ' and s = ', num2str(s)));
+                disp(['Continuity constraint not met for agent a = ', num2str(a), ' and s = ', num2str(s)]);
                 result = false;
             end
         end
@@ -471,7 +491,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                         for a2 = 1:A
                             for s2 = 1:S
                                 if dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) ~= 0
-                                    disp(strcat('Synchronization constraints incorrectly applied to t = ', num2str(t), ', agent a1 = ', num2str(a1), ', s1 = ', num2str(s1), ', a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
+                                    disp(['Synchronization constraints incorrectly applied to t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                     result = false;
                                 end
                             end
@@ -492,7 +512,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                     for a2 = 1:A
                         for s2 = 1:S
                             if not(dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) <= dv((start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) + tol && dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) <= dv((start_x_a_t_s - 1) + (a2 + ((t + 1) - 1)*A + ((s2 + 1) - 1)*A*(T+1))) + tol)
-                                disp(strcat('Synchronized tasks are not the same for t = ', num2str(t), ', agent a1 = ', num2str(a1), ', s1 = ', num2str(s1), ', a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
+                                disp(['Synchronized tasks are not the same for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                 result = false;
                             end
                         end
@@ -511,7 +531,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                     for a2 = 1:A
                         for s2 = 1:S
                             if not(abs(dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) - dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A + (a1 - 1)*(T-1)*A*S + (s1 - 1)*(T-1)*A*S*A))) < tol)
-                                disp(strcat('Tasks in slots (', num2str(a1), ', ', num2str(s1), ') and (', num2str(a1), ', ', num2str(s1), ') are not bidirectionally synchronized'));
+                                disp(['Tasks in slots (', num2str(a1), ', ', num2str(s1), ') and (', num2str(a1), ', ', num2str(s1), ') are not bidirectionally synchronized']);
                                 result = false;
                             end
                         end
@@ -539,7 +559,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                             end
                         end
                         if not(S_t <= (dv((start_na_t - 1) + t) - 1) * dv((start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) + tol && (dv((start_na_t - 1) + t) - 1) * dv((start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) - tol <= S_t)
-                            disp(strcat('Incorrect number of synchronizations for t = ', num2str(t)));
+                            disp(['Incorrect number of synchronizations for t = ', num2str(t)]);
                             result = false;
                         end
                     end
@@ -559,7 +579,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                     for a2 = a1+1:A
                         for s2 = 1:S
                             if abs(dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) - dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A))) > tol
-                                disp(strcat('Synchronization time coordination is not correct for t = ', num2str(t), ', agent a1 = ', num2str(a1), ', s1 = ', num2str(s1), ', a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
+                                disp(['Synchronization time coordination is not correct for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                 result = false;
                             end
                         end
@@ -579,7 +599,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                         for a2 = 1:A
                             for s2 = 1:S
                                 if dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) ~= 0
-                                    disp(strcat('Relay constraint incorrectly applied to task t = ', num2str(t), ', agent a1 = ', num2str(a1), ', s1 = ', num2str(s1), ', a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
+                                    disp(['Relay constraint incorrectly applied to task t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                     result = false;
                                 end
                             end
@@ -601,7 +621,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                     for a2 = 1:A
                         for s2 = 1:S
                             if not (dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) <= dv((start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) + tol && dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) <= dv((start_x_a_t_s - 1) + (a2 + ((t + 1) - 1)*A + ((s2 + 1) - 1)*A*(T+1))) + tol)
-                                disp(strcat('Relayed tasks are not the same for t = ', num2str(t), ', agent a1 = ', num2str(a1), ', s1 = ', num2str(s1), ', a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
+                                disp(['Relayed tasks are not the same for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                 result = false;
                             end
                         end
@@ -624,7 +644,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                         end
                     end
                     if not (R_t_a1_s1 <= 1)
-                        disp(strcat('"Each task can only be relayed once" constraint not met for t = ', num2str(t), ', agent a1 = ', num2str(a1), ' and s1 = ', num2str(s1)));
+                        disp(['"Each task can only be relayed once" constraint not met for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ')']);
                         result = false;
                     end
                 end
@@ -645,7 +665,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                         end
                     end
                     if not (R_t_a2_s2 <= 1)
-                        disp(strcat('"Each task can only rely one task" constraint not met for t = ', num2str(t), ', agent a2 = ', num2str(a2), ' and s2 = ', num2str(s2)));
+                        disp(['"Each task can only rely one task" constraint not met for t = ', num2str(t), ', (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                         result = false;
                     end
                 end
@@ -671,8 +691,8 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                         end
                     end
                 end
-                if not (abs(R_t - (dv((start_n_t - 1) + t) - dv((start_na_t - 1) + t))) < tol)
-                    disp(strcat('Incorrect number of relays for t = ', num2str(t)));
+                if not(abs(R_t - (dv((start_n_t - 1) + t) - dv((start_na_t - 1) + t))) < tol)
+                    disp(['Incorrect number of relays for t = ', num2str(t)]);
                     result = false;
                 end
             end
@@ -691,7 +711,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
                         for s2 = 1:S
                             if not(a1 == a2 && s1 == s2)
                                 if abs(dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) - dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) + dv((start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A))) > tol
-                                    disp(strcat('Relays time coordination constraint not met for t = ', num2str(t), ', agent a1 = ', num2str(a1), ', sensor s1 = ', num2str(s1), ', agent a2 = ', num2str(a2), ' and sensor s2 = ', num2str(s2)));
+                                    disp(['Relays time coordination constraint not met for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                     result = false;
                                 end
                             end
@@ -704,20 +724,17 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, execution_id, prin
 
     %% Check if the computed solution is equal to the input solution
     if length(sol) == length_dv
-        disp('Computed dv that aren''t equal to the solution:');
         for i = 1:length_dv
             if  abs(sol(i) - dv(i)) > tol
                 [var_name, var_index] = getVarName(i, dv_start_length);
-                disp(strcat(var_name, ' - ', num2str(var_index)));
+                disp(['Variable ', var_name, ' - ', num2str(var_index), ' is not equal in sol and computed solution']);
             end
         end
     end
 
     %% Print solution
-    if nargin > 3
-        printSolution(dv, Agent, Task, 1, [], execution_id, fval);
-    else
-        printSolution(dv, Agent, Task, 1, [], [], fval);
+    if print_solution_flag
+        printSolution(dv, Agent, Task, 0, scenario_id, execution_id, fval);
     end
 end
 
@@ -1043,8 +1060,8 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
 
             iteration_idx = iteration_idx + 1;
             if print_coord_steps_flag
-                display(strcat('Coordinated slots (', num2str(a), ',', num2str(s), ') and (', num2str(a2), ',', num2str(s2), ')'));
-                printSolution(dv, Agent, Task, 0, [], strcat('coordination iteration ', num2str(iteration_idx)));
+                disp(['Coordinated slots (', num2str(a), ',', num2str(s), ') and (', num2str(a2), ',', num2str(s2), ')']);
+                printSolution(dv, Agent, Task, 1, scenario_id, ['coordination iteration ', num2str(iteration_idx)]);
             end
 
             % Remove this coordination before checking if the past ones still coordinated because we may need to call again this function
@@ -1064,11 +1081,11 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
             % For every time (aw,sw) has been coordinated before with other slot
             for sb = 1:S
                 for ab = 1:A
-                % Note that, as synchronizations are bidirectional, if any(S(:, a, s, :, :)), there will be also any(S(:, :, :, a, s))
-                % Note that it is possible to have at the same time any(R(:, a, s, :, :)) and any(R(:, :, :, a, s)), but not to the same other slot
+                    % Note that, as synchronizations are bidirectional, if any(S(:, a, s, :, :)), there will be also any(S(:, :, :, a, s))
+                    % Note that it is possible to have at the same time any(R(:, a, s, :, :)) and any(R(:, :, :, a, s)), but not to the same other slot
                     coord_type_ind_before = 1 * any(S_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb)) + 10 * any(R_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb)) + 100 * any(R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw));
                     if coord_type_ind_before
-                    [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
+                        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
                     end
                 end
             end
@@ -1080,7 +1097,7 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
                     for ab = 1:A
                         coord_type_ind_before = 1 * any(S_t_a1_s1_a2_s2_coordinated(:, aw, sd, ab, sb)) + 10 * any(R_t_a1_s1_a2_s2_coordinated(:, aw, sd, ab, sb)) + 100 * any(R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sd));
                         if coord_type_ind_before
-                        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sd, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
+                            [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sd, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, slot_Tw_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
                         end
                     end
                 end
@@ -1097,6 +1114,7 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
             otherwise
                 error('Missing case in switch statement.');
             end
+
             if abs(tmp_time_to_wait) > tol
                 infinite_loop_flag = true;
                 break;
@@ -1119,17 +1137,17 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
             switch coord_type_ind
             case {1, 11, 101, 111, 10}
                 if flag_any_recharge && not(flag_any_coordination)
-                    slot_Tw_coordinated(strcat(num2str(a),',',num2str(s),',',num2str(a2),',',num2str(s2))) = [Tw, aw, sr];
-                    slot_Tw_coordinated(strcat(num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s))) = [Tw, aw, sr];
+                    slot_Tw_coordinated([num2str(a),',',num2str(s),',',num2str(a2),',',num2str(s2)]) = [Tw, aw, sr];
+                    slot_Tw_coordinated([num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s)]) = [Tw, aw, sr];
                 else
-                    slot_Tw_coordinated(strcat(num2str(a),',',num2str(s),',',num2str(a2),',',num2str(s2))) = [Tw, aw, sw];
-                    slot_Tw_coordinated(strcat(num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s))) = [Tw, aw, sw];
+                    slot_Tw_coordinated([num2str(a),',',num2str(s),',',num2str(a2),',',num2str(s2)]) = [Tw, aw, sw];
+                    slot_Tw_coordinated([num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s)]) = [Tw, aw, sw];
                 end
             case {100, 110}
                 if flag_any_recharge && not(flag_any_coordination)
-                    slot_Tw_coordinated(strcat(num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s))) = [Tw, aw, sr];
+                    slot_Tw_coordinated([num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s)]) = [Tw, aw, sr];
                 else
-                    slot_Tw_coordinated(strcat(num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s))) = [Tw, aw, sw];
+                    slot_Tw_coordinated([num2str(a2),',',num2str(s2),',',num2str(a),',',num2str(s)]) = [Tw, aw, sw];
                 end
             otherwise
                 error('Missing case in switch statement.');
@@ -1196,6 +1214,7 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
     otherwise
         error('Missing case in switch statement.');
     end
+
     if abs(time_to_wait) > tol
         % Add that coordination back to the pending list and get the slot where the waiting time was applied in the old coordination
         switch coord_type_ind_before
@@ -1204,18 +1223,19 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
             S_t_a1_s1_a2_s2(:, ab, sb, aw, sw) = 1;
             S_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb) = 0;
             S_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw) = 0;
-            Tw_aw_sw = slot_Tw_coordinated(strcat(num2str(aw),',',num2str(sw),',',num2str(ab),',',num2str(sb)));
+            Tw_aw_sw = slot_Tw_coordinated([num2str(aw),',',num2str(sw),',',num2str(ab),',',num2str(sb)]);
         case 10
             R_t_a1_s1_a2_s2(:, aw, sw, ab, sb) = 1;
             R_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb) = 0;
-            Tw_aw_sw = slot_Tw_coordinated(strcat(num2str(aw),',',num2str(sw),',',num2str(ab),',',num2str(sb)));
+            Tw_aw_sw = slot_Tw_coordinated([num2str(aw),',',num2str(sw),',',num2str(ab),',',num2str(sb)]);
         case {100, 110}
             R_t_a1_s1_a2_s2(:, ab, sb, aw, sw) = 1;
             R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw) = 0;
-            Tw_aw_sw = slot_Tw_coordinated(strcat(num2str(ab),',',num2str(sb),',',num2str(aw),',',num2str(sw)));
+            Tw_aw_sw = slot_Tw_coordinated([num2str(ab),',',num2str(sb),',',num2str(aw),',',num2str(sw)]);
         otherwise
             error('Missing case in switch statement.');
         end
+
         Twb = Tw_aw_sw(1);
         awb = Tw_aw_sw(2);
         swb = Tw_aw_sw(3);

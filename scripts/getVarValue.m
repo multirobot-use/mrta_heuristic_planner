@@ -3,7 +3,11 @@ function [var_value] = getVarValue(sol, Agent, Task, var_name)
     [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
     [dv_start_length, length_dv] = getStartLengthInformation(Agent, Task);
 
-    start_length = dv_start_length(var_name);
+    if strcmp(var_name, 'x_a_s')
+        start_length = dv_start_length('x_a_t_s');
+    else
+        start_length = dv_start_length(var_name);
+    end
     start = start_length(1);
     length = start_length(2);
 
@@ -13,6 +17,14 @@ function [var_value] = getVarValue(sol, Agent, Task, var_name)
     case 'z'
     case 'x_a_t_s'
         var_value = reshape(var_value, A, (T+1), (S+1));
+    case 'x_a_s'
+        aux_var_value = reshape(var_value, A, (T+1), (S+1));
+        var_value = zeros(A, S);
+        for a = 1:A
+            for s = 1:S
+                var_value(a,s) = sum(aux_var_value(a, :, s + 1) .* [0:T]);
+            end
+        end
     case 'xx_a_t_t_s'
         var_value = reshape(var_value, A, (T+1), T, S);
     case 'V_t'

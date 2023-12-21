@@ -29,7 +29,7 @@ You may also want to install [Gurobi](https://www.gurobi.com/) for Matlab to use
 The main script, which implements and solves the MILP formulation, is [optimalTaskAllocator](src/optimalTaskAllocator.m).
 Inside this file there is a function defined as:
 ```
-function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, formulation_variants_flags, config_flags)
+function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, objective_function, formulation_variants_flags, config_flags, solver_config)
 ```
 First, the `scenario_id` parameter should be numeric if we want to solve a manually predefined [scenario](scripts/scenario.m), `0` if we want to solve a randomly generated scenario, and should be a string if we want to solve a saved scenario. In this last case `scenario_id` should be the ID name string of the saved scenario.
 
@@ -37,9 +37,11 @@ Second, the `execution_id` parameter is a string, used in the log file and as fi
 
 Third, the `scenario size` parameter is a 1x3 vector with the number of robots (A), number of tasks (T) (without counting the recharge task) and number of different types of robots (types). This is used only when we want to solve a randomly generated scenario (`scenario_id == 0`), otherwise, this parameter can be set to an empty array.
 
+`objective_function` is an integer parameter that allows us to choose between different predefined objective functions to minimize. The details about the different options can be found commented in the source file.
+
 Then, optionally, `formulation_variants_flags` parameter allows us to modify the problem to solve a scenario with a slightly different MILP formulation. It's a 1x4 logic vector corresponding to the following flags: `[recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag]`. We can set this parameter to an empty array to use default config: the complete formulation. 
 
-Last, `config_flags` parameter is a 1x7 logic vector corresponding to the following option flags: `[save_flag, test_flag, solve_flag, recovery_flag, display_flag, log_file_flag, print_solution_flag]`. The default configuration is used if this is set to an empty array.
+Last, `config_flags` parameter is a 1x8 logic vector corresponding to the following option flags: `[solve_flag, initialize_flag, print_solution_flag, display_flag, log_file_flag, save_flag, test_flag, recovery_flag]`. The default configuration is used if this is set to an empty array.
 
 In this way, we can run the planner to solve a ramdomly generated scenario with `3` robots, `2` tasks and `1` defferent
 type of robot like:
@@ -48,7 +50,7 @@ type of robot like:
 ```
 By default, the print solution flag is set to false. To change that we need to specify it in the last parameter:
 ```
-[sol, fval] = optimalTaskAllocator(0, 'random', [3 2 1], [], [1 1 0 0 0 0 0]);
+[sol, fval] = optimalTaskAllocator(0, 'random', [3 2 1], [], [], [1 1 0 0 0 0 0]);
 ```
 If the scenario is feasible, we would see the optimal solution displayed in a bar plot like this:
 
@@ -56,10 +58,11 @@ If the scenario is feasible, we would see the optimal solution displayed in a ba
 
 Note that the bar for each task is divided into two parts. The upper part represents the total duration of the task. We can see that the task name/id appears above it. The length of the lower part represents what part of task time corresponds to the travel time, waiting time and execution time.
 
-To solve a predefined scenario (for example scenario `1`), and moreover to do so with a variant of the formulation, we can run it like:
+To solve a predefined scenario (for example scenario `1`), and moreover to do so with a different objective function and with a variant of the formulation, we can run it like:
 ```
-[sol, fval] = optimalTaskAllocator(1, 'Test', [], [1 0 0 0], []);
+[sol, fval] = optimalTaskAllocator(1, 'Test', [], 4, [1 0 0 0], []);
 ```
+Here we are running the mission planner with the fourth predefined objective function and a variant where only recharge are allowed. Task are not fragmentable nor decomposable, and the coalition size flexibility is always hard.
 
 ### Analyzing the solution
 After running the `optimalTaskAllocator()` function, we can check the values of some variables of the solution vector using the [getVarValue](scripts/getVarValue.m) script. To do so, we first need to load the information about the scenario that has just been solved:
