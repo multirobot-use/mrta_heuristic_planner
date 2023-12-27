@@ -1,13 +1,31 @@
-function [dv] = initializer(arg_1, arg_2)
+function [dv] = initializer(arg_1, arg_2, print_solution_flag)
     switch nargin
     case 1
         try
             scenario_id = arg_1;
+            print_solution_flag = false;
             [Agent, Task] = scenario(scenario_id);
         catch
             error('Either Agent and Task or a valid scenario_id must be provided');
         end
     case 2
+        if ischar(arg_1)
+            try
+                scenario_id = arg_1;
+                print_solution_flag = arg_2;
+                [Agent, Task] = scenario(scenario_id);
+            catch
+                error('Either Agent and Task or a valid scenario_id must be provided');
+            end
+        elseif isempty(arg_1) || isempty(arg_2)
+            error('Either Agent and Task or a valid scenario_id must be provided');
+        else
+            Agent = arg_1;
+            Task  = arg_2;
+            scenario_id = [];
+            print_solution_flag = false;
+        end
+    case 3
         if isempty(arg_1) || isempty(arg_2)
             error('Either Agent and Task or a valid scenario_id must be provided');
         end
@@ -53,36 +71,30 @@ function [dv] = initializer(arg_1, arg_2)
     % Update coalition size of the tasks according to their flexibility (not for relayable tasks)
     na(~[Task.N_hardness] & ~[Task.Relayability]) = 1;
 
-    % Sort tasks by type and deadline. First non-decomposable and fragmentable tasks, then relayable tasks.
-    % Get indexes of the non-decomposable and fragmentable tasks (tf_idx ranges from 1 to T-1).
-    tf_idx = find([Task(2:end).Relayability] == 0);
+    % Sort tasks by type and deadline. First non-decomposable, fragmentable and relayable (with Task(t).nf = 1) tasks, then relayable tasks with Task(t).nf != 1.
+    % Get indexes of the non-decomposable, fragmentable and relayable (with Task(t).nf = 1) tasks (tf_idx ranges from 1 to T-1).
+    tf_idx = find([Task(2:end).Relayability] == 0 | ([Task(2:end).Relayability] == 1 & [Task(2:end).nf] == 1));
 
-    % Get indexes of the relayable tasks (tr_idx ranges from 1 to T-1).
-    tr_idx = find([Task(2:end).Relayability] == 1);
+    % Get indexes of the relayable tasks with Task(t).nf != 1 (tr_idx ranges from 1 to T-1).
+    tr_idx = find([Task(2:end).Relayability] == 1 & [Task(2:end).nf] ~= 1);
 
     % Adjust indexes to match the tasks' indexes
     tf_idx = tf_idx + 1;
     tr_idx = tr_idx + 1;
 
-    % Sort non-decomposable and fragmentable tasks by deadline
+    % Sort non-decomposable, fragmentable and relayable (with Task(t).nf = 1) tasks by deadline
     [~, tf_deadline_idx] = sort([Task(tf_idx).tmax]);
 
-    % Sort relayable tasks by deadline
+    % Sort relayable tasks with Task(t).nf != 1 by deadline
     [~, tr_deadline_idx] = sort([Task(tr_idx).tmax]);
 
     % Join indexed from both groups
     deadline_idx = [tf_idx(tf_deadline_idx), tr_idx(tr_deadline_idx)];
 
-    % Assign non-decomposable and fragmentable tasks in deadline order
+    % Assign non-decomposable, fragmentable and relayable (with Task(t).nf = 1) tasks in deadline order
     for task = 1:length(tf_deadline_idx)
         % Get task's id
         t = tf_idx(tf_deadline_idx(task));
-
-        % As n(t) = na(t) * nf(t), we need to assign the current task na * nf times
-        % In order to create task synchronization and relays relationships, we'll assign them by groups
-        % Initialize selected robot and slot groups
-        groups_robot = [];
-        groups_slot  = [];
 
         % Create the nf(t) groups
         for fragment = 1:Task(t).nf
@@ -606,7 +618,7 @@ function [dv] = initializer(arg_1, arg_2)
     xats_nf_S_R = [xats nf_t Sta1s1a2s2 Rta1s1a2s2];
 
     % Compute the auxiliary decision variables
-    [dv_chk, ~, result_chk] = checkSolution(xats_nf_S_R, Agent, Task, scenario_id, 'Initial solution', false);
+    [dv_chk, ~, result_chk] = checkSolution(xats_nf_S_R, Agent, Task, 0, scenario_id, 'Initial solution', print_solution_flag);
 
     % Check if the scenario is feasible and return
     if result_chk

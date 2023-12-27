@@ -563,6 +563,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     switch objective_function
     case 2
         % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+        % Note: no need to minimize Tw as its included in the total joint flight time.
         f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
     case 3
         % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
@@ -578,6 +579,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = betta/tmax_m;
         
         % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
+        % Note: here Tw penalises twice, first in the total joint flight time term, then in the Tw term
         f((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
     otherwise
         % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
@@ -2270,71 +2272,107 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
         % Decompose fval into each objective function term associated fval
         if log_file_flag
-            fprintf(logFile, 'fval f = %f s\n', fval);
-        end
+            f_term_1  = zeros(1,length_dv);
+            f_term_2  = zeros(1,length_dv);
+            f_term_3  = zeros(1,length_dv);
+            f_term_4  = zeros(1,length_dv);
 
-        f_term = zeros(1,length_dv);
-        switch objective_function
-        case 2
-            % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-            f_term((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
-        otherwise
-            % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
-            f_term((start_z - 1) + 1) = 1/z_max;
-        end
-        fval_f1 = f_term*sol;
-        if log_file_flag
-            fprintf(logFile, 'fval f_1 = %f s\n', fval_f1);
-        end
+            % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
+            f_term_2((start_d_tmax_tfin_a_s - 1) + 1 : (start_d_tmax_tfin_a_s - 1) + length_d_tmax_tfin_a_s) = 1/d_tmax_max;
 
-        f_term = zeros(1,length_dv);
-        % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
-        f_term((start_V_t - 1) + 2 : (start_V_t - 1) + length_V_t) = 1/V_max;
-        fval_f2 = f_term*sol;
-        if log_file_flag
-            fprintf(logFile, 'fval f_2 = %f s\n', fval_f2);
-        end
+            % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
+            f_term_4((start_V_t - 1) + 2 : (start_V_t - 1) + length_V_t) = 1/V_max;
 
-        f_term = zeros(1,length_dv);
-        % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
-        f_term((start_d_tmax_tfin_a_s - 1) + 1 : (start_d_tmax_tfin_a_s - 1) + length_d_tmax_tfin_a_s) = 1/d_tmax_max;
-        fval_f3 = f_term*sol;
-        if log_file_flag
-            fprintf(logFile, 'fval f_3 = %f s\n', fval_f3);
-        end
+            fval_f2 = f_term_2*sol;
+            fval_f4 = f_term_4*sol;
 
-        f_term = zeros(1,length_dv);
-        % s_used: Coefficients of the term minimizing the number of used slots.
-        f_term((start_s_used - 1) + 1 : (start_s_used - 1) + length_s_used) = 1/s_used_max;
-        fval_f4 = f_term*sol;
-        if log_file_flag
-            fprintf(logFile, 'fval f_4 = %f s\n', fval_f4);
-        end
-
-        if objective_function <= 1
-            f_term = zeros(1,length_dv);
-            % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
-            f_term((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
-            fval_f5 = f_term*sol;
-            if log_file_flag
-                fprintf(logFile, 'fval f_5 = %f s\n', fval_f5);
-            end
-        end
-
-        if log_file_flag
             switch objective_function
             case 2
                 % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-                disp([fval fval_f1 fval_f2 fval_f3 fval_f4]);
-            otherwise
+                f_term_1((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
+
+                fval_f1 = f_term_1*sol;
+                
+                fprintf(logFile, 'fval f   = %f s\n', fval);
+                fprintf(logFile, 'fval f_1 = %f s\n', fval_f1);
+                fprintf(logFile, 'fval f_2 = %f s\n', fval_f2);
+                fprintf(logFile, 'fval f_4 = %f s\n', fval_f4);
+
+                disp('fval fval_f1 fval_f2 fval_f4');
+                disp([fval fval_f1 fval_f2 fval_f4]);
+            case 3
                 % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+                f_term_1((start_z - 1) + 1) = 1/z_max;
+                
+                % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
+                f_term_3((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
+
+                fval_f1 = f_term_1*sol;
+                fval_f3 = f_term_3*sol;
+
+                fprintf(logFile, 'fval f   = %f s\n', fval);
+                fprintf(logFile, 'fval f_1 = %f s\n', fval_f1);
+                fprintf(logFile, 'fval f_2 = %f s\n', fval_f2);
+                fprintf(logFile, 'fval f_3 = %f s\n', fval_f3);
+                fprintf(logFile, 'fval f_4 = %f s\n', fval_f4);
+
+                disp('fval fval_f1 fval_f2 fval_f3 fval_f4');
+                disp([fval fval_f1 fval_f2 fval_f3 fval_f4]);
+            case 4
+                f_term_1a = zeros(1,length_dv);
+                f_term_1b = zeros(1,length_dv);
+
+                % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+                f_term_1a((start_z - 1) + 1) = alpha/z_max;
+
+                % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+                f_term_1b((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = betta/tmax_m;
+                
+                % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
+                f_term_3((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
+
+                fval_f1a = f_term_1a*sol;
+                fval_f1b = f_term_1b*sol;
+                fval_f3  = f_term_3*sol;
+
+                fprintf(logFile, 'fval f    = %f s\n', fval);
+                fprintf(logFile, 'fval f_1a = %f s\n', fval_f1a);
+                fprintf(logFile, 'fval f_1b = %f s\n', fval_f1b);
+                fprintf(logFile, 'fval f_2  = %f s\n', fval_f2);
+                fprintf(logFile, 'fval f_3  = %f s\n', fval_f3);
+                fprintf(logFile, 'fval f_4  = %f s\n', fval_f4);
+
+                disp('fval fval_f1a fval_f1b fval_f2 fval_f3 fval_f4');
+                disp([fval fval_f1a fval_f1b fval_f2 fval_f3 fval_f4]);
+            otherwise
+                f_term_5  = zeros(1,length_dv);
+
+                % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+                f_term_1((start_z - 1) + 1) = 1/z_max;
+                
+                % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
+                f_term_3((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
+
+                % s_used: Coefficients of the term minimizing the number of used slots.
+                f_term_5((start_s_used - 1) + 1 : (start_s_used - 1) + length_s_used) = 1/s_used_max;
+
+                fval_f1 = f_term_1*sol;
+                fval_f3 = f_term_3*sol;
+                fval_f5 = f_term_5*sol;
+
+                fprintf(logFile, 'fval f   = %f s\n', fval);
+                fprintf(logFile, 'fval f_1 = %f s\n', fval_f1);
+                fprintf(logFile, 'fval f_2 = %f s\n', fval_f2);
+                fprintf(logFile, 'fval f_3 = %f s\n', fval_f3);
+                fprintf(logFile, 'fval f_4 = %f s\n', fval_f4);
+                fprintf(logFile, 'fval f_5 = %f s\n', fval_f5);
+
+                disp('fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5');
                 disp([fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5]);
             end
         end
-    end
 
-    % Add a spacing line at the end of each run in the log file
-    if log_file_flag
+        % Add a spacing line at the end of each run in the log file
         fprintf(logFile, '\n--------------------\n');
     end
 
