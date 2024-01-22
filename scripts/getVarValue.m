@@ -11,7 +11,7 @@ function [var_value] = getVarValue(sol, Agent, Task, var_name)
     start = start_length(1);
     length = start_length(2);
 
-    var_value = sol(start:start+length-1)';
+    var_value = full(sol(start:start+length-1))';
 
     switch var_name
     case 'z'

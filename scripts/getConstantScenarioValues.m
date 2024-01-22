@@ -107,22 +107,26 @@ function [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantSce
             end
 
             % Add information to the task structure
-            if Task(t).Relayability || Task(t).Fragmentability
-                % Number of compatible robots
-                Task(t).nc = max_N;
+            % Number of compatible robots
+            Task(t).nc = max_N;
 
-                % Number of exceeding robots (nc - N_needed)
-                Task(t).ex = exceeding_N;
+            % Number of exceeding robots (nc - N_needed)
+            Task(t).ex = exceeding_N;
 
-                % Correction factor
-                Task(t).cf = correction_factor;
+            % Correction factor
+            Task(t).cf = correction_factor;
 
-                % Number of fragments needed
-                Task(t).nf = aux_N;
+            % Number of fragments needed
+            Task(t).nf = aux_N;
 
-                % Recharge frequency (each f consecutive fragments in a robot, 1 recharge is needed)
-                Task(t).f = floor((aux_Ft - Task(R).Te) / (aux_Te / aux_N));
-            end
+            % Recharge frequency (each f consecutive fragments in a robot, 1 recharge is needed)
+            Task(t).f = floor((aux_Ft - Task(R).Te) / (aux_Te / aux_N));
+        else
+            Task(t).nc = A;
+            Task(t).ex = A;
+            Task(t).cf = 1;
+            Task(t).nf = 1;
+            Task(t).f  = 0;
         end
     end
     % Add some extra fragments for slack purposes
@@ -143,6 +147,16 @@ function [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantSce
                 else
                     Te_t_nf(t,nf) = Task(t).Te / nf;
                 end
+            end
+        end
+    end
+
+    % Agent - Task compatibility
+    H_a_t = zeros(A, T);
+    for a = 1:A
+        for t = 1:T
+            if (ismember(Agent(a).type, Task(t).Hr))
+                H_a_t(a,t) = 1;
             end
         end
     end
@@ -193,17 +207,22 @@ function [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantSce
             S = S + ceil(correction_factor * aux_Te * N_needed / aux_Ft);
         end
     end
+
     % Add some extra slots for slack purposes
     slack_S = 0; %(T - 1);
     S = S + slack_S;
 
-    % Agent - Task compatibility
-    H_a_t = zeros(A, T);
-    for a = 1:A
-        for t = 1:T
-            if (ismember(Agent(a).type, Task(t).Hr))
-                H_a_t(a,t) = 1;
-            end
+    % Check if initializer has been run to make sure S get the correct value
+    if isfield(Agent, 'queue')
+        % Get the number of used slots per robot
+        used_slots = zeros(1,A);
+        for a = 1:A
+            used_slots(a) = length(Agent(a).queue) - 1;
+        end
+
+        % Check if initializer uses more than S
+        if max(used_slots) > S
+            S = max(used_slots);
         end
     end
 end

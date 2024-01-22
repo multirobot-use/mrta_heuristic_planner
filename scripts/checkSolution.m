@@ -44,6 +44,9 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
     [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
     [z_max, tmax_m, Tw_max, V_max, d_tmax_max, s_used_max] = getNormalizationWeights(Agent, Task);
 
+    % Put constant scenario values into a structure
+    constant_scenario_values = struct('A', A, 'T', T, 'S', S, 'N', N, 'R', R);
+
     % Update Recharge maximum time
     Task(R).tmax = tmax_m;
 
@@ -349,7 +352,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
             last_update_flag = true;
         end
         %% Compute all variables that depends on Tw_a_s directly or indirectly with Tw_a_s' actual value
-        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
+        dv = updateTfin(dv, dv_start_length, constant_scenario_values);
 
         if print_coord_steps_flag && iteration_idx == 0
             printSolution(dv, Agent, Task, 0, scenario_id, ['coordination iteration ', num2str(iteration_idx)]);
@@ -369,7 +372,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                 if coord_type_ind
                     % Get (a2,s2) to be able to call coordinateTwoSlots for the first time (note: inside coordinateTwoSlots, (a2,s2) is computed again because at the end of the main while loop, (a,s) can change to the old (a2,s2))
                     [a2, s2] = geta2s2(a, s, A, S, coord_type_ind, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2);
-                    [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(a, s, a2, s2, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
+                    [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(a, s, a2, s2, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, constant_scenario_values, tol, iteration_idx, print_coord_steps_flag);
                 end
                 if coord_type_ind
                     break;
@@ -377,6 +380,116 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
             end
             if coord_type_ind
                 break;
+            end
+        end
+    end
+
+    % Update Tw_a_s dependent variables
+    %? d_tmax_tfin_a_s
+    %* Depends on: tfin_a_s, tfinx_a_t_s
+    %? tfinx_a_t_s
+    %* Depends on: tfin_a_s, x_a_t_s
+    % d_tmax_tfin_a_s >= tfin(a,s) * sum from t = 1 to T of (x(a,t,s)) - tmax(a,s), for all a = 1 to A and s = 1 to S
+    % d_tmax_tfin_a_s >= sum from t = 1 to T of (tfin(a,s) * x(a,t,s)) - sum from t = 1 to T of (tmax(t)*x(a,t,s)), for all a = 1 to A and s = 1 to S
+    % d_tmax_tfin_a_s >= sum from t = 1 to T of ((tfin(a,s) - tmax(t))*x(a,t,s)), for all a = 1 to A and s = 1 to S
+    for a = 1:A
+        for s = 1:S
+            aux_tfinx_a_t_s = 0;
+            for t = 1:T
+                % (tfin(a,s) - tmax(t)) * x(a,t,s)
+                aux_tfinx_a_t_s = aux_tfinx_a_t_s + (dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) - Task(t).tmax) * dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)));
+
+                % tfinx_a_t_s = tfin(a,s)*x(a,t,s)
+                dv((start_tfinx_a_t_s - 1) + (a + (t - 1)*A + (s - 1)*A*T)) = dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) * dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)));
+            end
+            % d_tmax_tfin_a_s = max(aux_tfinx_a_t_s - tmax_a(s), 0)
+            dv((start_d_tmax_tfin_a_s - 1) + (a + (s - 1)*A)) = max(aux_tfinx_a_t_s, 0);
+        end
+    end
+
+    %? z
+    %* Depends on: tfinx
+    % z = max(tfin(a,S)) -> tfin(a,S) - z <= 0
+    for a = 1:A
+        % z >= tfin(a,S)
+        if dv((start_z - 1) + 1) < dv((start_tfin_a_s - 1) + (a + ((S + 1) - 1)*A))
+            dv((start_z - 1) + 1) = dv((start_tfin_a_s - 1) + (a + ((S + 1) - 1)*A));
+        end
+    end
+
+    %? Ftx_a_s1
+    %* Depends on: x_a_t_s, Ft_a_s
+    %? Ft_a_s
+    %* Depends on: nfx_a_nf_t_s, Ft_a_s, Ftx_a_s1, Td_a_s, Tw_a_s, Te_a_s
+    % Flight time value
+    % Ft(a,s) = Ft(a,s-1) * (1 - x(a,R,s-1)) + Td(a,s) + (Tw(a,s) + Te(a,s)) * (1 - x(a,R,s)), for all a = 1 to A and s = 1 to S
+    for a = 1:A
+        % Ft(a,0) = Ft_0(a)
+        dv((start_Ft_a_s - 1) + (a + ((0 + 1) - 1)*A)) = Agent(a).Ft_0;
+        for s = 1:S
+            % Ftx_a_s1 = xa(R,s-1) * Ft_a(s-1)
+            dv((start_Ftx_a_s1 - 1) + (a + (s - 1)*A)) = dv((start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1))) * dv((start_Ft_a_s - 1) + (a + (((s-1) + 1) - 1)*A));
+
+            % Twx_a_s = Tw(a,s) * x(a,R,s)
+            dv((start_Twx_a_s - 1) + (a + (s - 1)*A)) = dv((start_Tw_a_s - 1) + (a + (s - 1)*A)) * dv((start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)));
+
+             % Ft(a,s) = Ft(a,s-1) * (1 - x(a,R,s-1)) + Td(a,s) + (Tw(a,s) + Te(a,s)) * (1 - x(a,R,s))
+            dv((start_Ft_a_s - 1) + (a + ((s + 1) - 1)*A)) = dv((start_Ft_a_s - 1) + (a + (((s-1) + 1) - 1)*A)) * (1 - dv((start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1)))) + dv((start_Td_a_s - 1) + (a + (s - 1)*A)) + (dv((start_Tw_a_s - 1) + (a + (s - 1)*A)) + dv((start_Te_a_s - 1) + (a + (s - 1)*A))) * (1 - dv((start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))));
+        end
+    end
+
+    %? tfinS_t_a1_s1_a2_s2
+    %* Depends on: tfin_a_s, S_t_a1_s1_a2_s2
+    for t = 1:T
+        if t ~= R
+            % Synchronization constraints could be applied only to tasks that have a specified number of robots
+            if Task(t).N ~= 0
+                for a1 = 1:A
+                    for s1 = 1:S
+                        for a2 = 1:A
+                            if a1 ~= a2
+                                for s2 = 1:S
+                                    % tfin(a1,s1)*S(t,a1,s1,a2,s2) -> tfinS(1,t,a1,s1,a2,s2)
+                                    %! Next is the (9) most time consuming line in this code right now
+                                    dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) * dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+
+                                    % tfin(a2,s2)*S(t,a1,s1,a2,s2) -> tfinS(2,t,a1,s1,a2,s2)
+                                    dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) * dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    %? tfinR_t_a1_s1_a2_s2
+    %* Depends on: tfin_a_s, R_t_a1_s1_a2_s2
+    %? TeR_t_a1_s1_a2_s2
+    %* Depends on: Te_a_s, R_t_a1_s1_a2_s2
+    for t = 1:T
+        if t ~= R
+            % Relay constraints could be applied only to relayable tasks
+            if Task(t).Relayability == 1
+                for a1 = 1:A
+                    for s1 = 1:S
+                        for a2 = 1:A
+                            for s2 = 1:S
+                                if not(a1 == a2 && s1 == s2)
+                                    % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
+                                    dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+
+                                    % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
+                                    dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+
+                                    % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
+                                    dv((start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = dv((start_Te_a_s - 1) + (a2 + (s2 - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
+                                end
+                            end
+                        end
+                    end
+                end
             end
         end
     end
@@ -508,6 +621,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                     for s1 = 1:S
                         for a2 = 1:A
                             for s2 = 1:S
+                                %! Next is the (12) most time consuming line in this code right now
                                 if dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) ~= 0
                                     disp(['Synchronization constraints incorrectly applied to t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                     result = false;
@@ -529,6 +643,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                 for s1 = 1:S
                     for a2 = 1:A
                         for s2 = 1:S
+                            %! Next is the (5) most time consuming line in this code right now
                             if not(dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) <= dv((start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) + tol && dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) <= dv((start_x_a_t_s - 1) + (a2 + ((t + 1) - 1)*A + ((s2 + 1) - 1)*A*(T+1))) + tol)
                                 disp(['Synchronized tasks are not the same for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                 result = false;
@@ -548,6 +663,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                 for s1 = 1:S
                     for a2 = 1:A
                         for s2 = 1:S
+                            %! Next is the (3) most time consuming line in this code right now
                             if not(abs(dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) - dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a2 - 1)*(T-1) + (s2 - 1)*(T-1)*A + (a1 - 1)*(T-1)*A*S + (s1 - 1)*(T-1)*A*S*A))) < tol)
                                 disp(['Tasks in slots (', num2str(a1), ', ', num2str(s1), ') and (', num2str(a1), ', ', num2str(s1), ') are not bidirectionally synchronized']);
                                 result = false;
@@ -572,6 +688,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                         for a2 = 1:A
                             if a1 ~= a2
                                 for s2 = 1:S
+                                    %! Next is the (10) most time consuming line in this code right now
                                     S_t = S_t + dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
                                 end
                             end
@@ -596,6 +713,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                 for s1 = 1:S
                     for a2 = a1+1:A
                         for s2 = 1:S
+                            %! Next is the (11) most time consuming line in this code right now
                             if abs(dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) - dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A))) > tol
                                 disp(['Synchronization time coordination is not correct for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                 result = false;
@@ -616,6 +734,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                     for s1 = 1:S
                         for a2 = 1:A
                             for s2 = 1:S
+                                %! Next is the (7) most time consuming line in this code right now
                                 if dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) ~= 0
                                     disp(['Relay constraint incorrectly applied to task t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                     result = false;
@@ -638,6 +757,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                 for s1 = 1:S
                     for a2 = 1:A
                         for s2 = 1:S
+                            %! Next is the (4) most time consuming line in this code right now
                             if not (dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) <= dv((start_x_a_t_s - 1) + (a1 + ((t + 1) - 1)*A + ((s1 + 1) - 1)*A*(T+1))) + tol && dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) <= dv((start_x_a_t_s - 1) + (a2 + ((t + 1) - 1)*A + ((s2 + 1) - 1)*A*(T+1))) + tol)
                                 disp(['Relayed tasks are not the same for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                 result = false;
@@ -658,6 +778,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                     R_t_a1_s1 = 0;
                     for a2 = 1:A
                         for s2 = 1:S
+                            %! Next is the (6) most time consuming line in this code right now
                             R_t_a1_s1 = R_t_a1_s1 + dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
                         end
                     end
@@ -679,6 +800,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                     R_t_a2_s2 = 0;
                     for a1 = 1:A
                         for s1 = 1:S
+                            %! Next is the (8) most time consuming line in this code right now
                             R_t_a2_s2 = R_t_a2_s2 + dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
                         end
                     end
@@ -728,6 +850,7 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
                     for a2 = 1:A
                         for s2 = 1:S
                             if not(a1 == a2 && s1 == s2)
+                                %! Next is the (2) most time consuming line in this code right now
                                 if abs(dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) - dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) + dv((start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A))) > tol
                                     disp(['Relays time coordination constraint not met for t = ', num2str(t), ', (a1, s1) = (', num2str(a1), ', ', num2str(s1), ') and (a2, s2) = (', num2str(a2), ', ', num2str(s2), ')']);
                                     result = false;
@@ -756,39 +879,43 @@ function [dv, fval, result] = checkSolution(sol, Agent, Task, objective_function
     end
 end
 
-%% Update Tw dependent variables
-function [dv] = updateTwDependentVariables(dv, dv_start_length, Agent, Task)
-    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
-
-    % Get all dv start and length information
-    [start_z                   length_z                   ...
-     start_x_a_t_s             length_x_a_t_s             ...
-     start_xx_a_t_t_s          length_xx_a_t_t_s          ...
-     start_V_t                 length_V_t                 ...
-     start_n_t                 length_n_t                 ...
-     start_na_t                length_na_t                ...
-     start_nq_t                length_nq_t                ...
-     start_nq_a_t              length_nq_a_t              ...
-     start_nf_t                length_nf_t                ...
-     start_nf_t_nf             length_nf_t_nf             ...
-     start_nfx_a_nf_t_s        length_nfx_a_nf_t_s        ...
-     start_naf_t_nf            length_naf_t_nf            ...
-     start_nax_a_t_s           length_nax_a_t_s           ...
-     start_Ft_a_s              length_Ft_a_s              ...
-     start_Ftx_a_s1            length_Ftx_a_s1            ...
-     start_tfin_a_s            length_tfin_a_s            ...
-     start_tfinx_a_t_s         length_tfinx_a_t_s         ...
-     start_d_tmax_tfin_a_s     length_d_tmax_tfin_a_s     ...
-     start_s_used              length_s_used              ...
-     start_Td_a_s              length_Td_a_s              ...
-     start_Tw_a_s              length_Tw_a_s              ...
-     start_Twx_a_s             length_Twx_a_s             ...
-     start_Te_a_s              length_Te_a_s              ...
-     start_S_t_a1_s1_a2_s2     length_S_t_a1_s1_a2_s2     ...
-     start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2 ...
-     start_R_t_a1_s1_a2_s2     length_R_t_a1_s1_a2_s2     ...
-     start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2 ...
-     start_TeR_t_a1_s1_a2_s2   length_TeR_t_a1_s1_a2_s2      ] = extractStartLengthInformation(dv_start_length);
+%% Update tfin_a_s
+function [dv] = updateTfin(dv, dv_start_length, constant_scenario_values)
+    A = constant_scenario_values.A;
+    T = constant_scenario_values.T;
+    S = constant_scenario_values.S;
+    N = constant_scenario_values.N;
+    R = constant_scenario_values.R;
+    
+    % Get needed dv start and length information
+    [~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     start_tfin_a_s, ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     start_Td_a_s,   ~, ...
+     start_Tw_a_s,   ~, ...
+     ~,              ~, ...
+     start_Te_a_s,   ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~] = extractStartLengthInformation(dv_start_length);
 
     %? tfin_a_s
     %* Depends on: Td_a_s, Tw_a_s, Te_a_s
@@ -800,114 +927,6 @@ function [dv] = updateTwDependentVariables(dv, dv_start_length, Agent, Task)
         for s = 1:S
             % tfin_a(s) = tfin(a,s-1) + Td(a,s) + Tw(a,s) + Te(a,s)
             dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) = dv((start_tfin_a_s - 1) + (a + (((s-1) + 1) - 1)*A)) + dv((start_Td_a_s - 1) + (a + (s - 1)*A)) + dv((start_Tw_a_s - 1) + (a + (s - 1)*A)) + dv((start_Te_a_s - 1) + (a + (s - 1)*A));
-        end
-    end
-
-    %? d_tmax_tfin_a_s
-    %* Depends on: tfin_a_s, tfinx_a_t_s
-    %? tfinx_a_t_s
-    %* Depends on: tfin_a_s, x_a_t_s
-    % d_tmax_tfin_a_s >= tfin(a,s) * sum from t = 1 to T of (x(a,t,s)) - tmax(a,s), for all a = 1 to A and s = 1 to S
-    % d_tmax_tfin_a_s >= sum from t = 1 to T of (tfin(a,s) * x(a,t,s)) - sum from t = 1 to T of (tmax(t)*x(a,t,s)), for all a = 1 to A and s = 1 to S
-    % d_tmax_tfin_a_s >= sum from t = 1 to T of ((tfin(a,s) - tmax(t))*x(a,t,s)), for all a = 1 to A and s = 1 to S
-    for a = 1:A
-        for s = 1:S
-            aux_tfinx_a_t_s = 0;
-            for t = 1:T
-                % (tfin(a,s) - tmax(t)) * x(a,t,s)
-                aux_tfinx_a_t_s = aux_tfinx_a_t_s + (dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) - Task(t).tmax) * dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)));
-
-                % tfinx_a_t_s = tfin(a,s)*x(a,t,s)
-                dv((start_tfinx_a_t_s - 1) + (a + (t - 1)*A + (s - 1)*A*T)) = dv((start_tfin_a_s - 1) + (a + ((s + 1) - 1)*A)) * dv((start_x_a_t_s - 1) + (a + ((t + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)));
-            end
-            % d_tmax_tfin_a_s = max(aux_tfinx_a_t_s - tmax_a(s), 0)
-            dv((start_d_tmax_tfin_a_s - 1) + (a + (s - 1)*A)) = max(aux_tfinx_a_t_s, 0);
-        end
-    end
-
-    %? z
-    %* Depends on: tfinx
-    % z = max(tfin(a,S)) -> tfin(a,S) - z <= 0
-    for a = 1:A
-        % z >= tfin(a,S)
-        if dv((start_z - 1) + 1) < dv((start_tfin_a_s - 1) + (a + ((S + 1) - 1)*A))
-            dv((start_z - 1) + 1) = dv((start_tfin_a_s - 1) + (a + ((S + 1) - 1)*A));
-        end
-    end
-
-    %? Ftx_a_s1
-    %* Depends on: x_a_t_s, Ft_a_s
-    %? Ft_a_s
-    %* Depends on: nfx_a_nf_t_s, Ft_a_s, Ftx_a_s1, Td_a_s, Tw_a_s, Te_a_s
-    % Flight time value
-    % Ft(a,s) = Ft(a,s-1) * (1 - x(a,R,s-1)) + Td(a,s) + (Tw(a,s) + Te(a,s)) * (1 - x(a,R,s)), for all a = 1 to A and s = 1 to S
-    for a = 1:A
-        % Ft(a,0) = Ft_0(a)
-        dv((start_Ft_a_s - 1) + (a + ((0 + 1) - 1)*A)) = Agent(a).Ft_0;
-        for s = 1:S
-            % Ftx_a_s1 = xa(R,s-1) * Ft_a(s-1)
-            dv((start_Ftx_a_s1 - 1) + (a + (s - 1)*A)) = dv((start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1))) * dv((start_Ft_a_s - 1) + (a + (((s-1) + 1) - 1)*A));
-
-            % Twx_a_s = Tw(a,s) * x(a,R,s)
-            dv((start_Twx_a_s - 1) + (a + (s - 1)*A)) = dv((start_Tw_a_s - 1) + (a + (s - 1)*A)) * dv((start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + ((s + 1) - 1)*A*(T+1)));
-
-             % Ft(a,s) = Ft(a,s-1) * (1 - x(a,R,s-1)) + Td(a,s) + (Tw(a,s) + Te(a,s)) * (1 - x(a,R,s))
-            dv((start_Ft_a_s - 1) + (a + ((s + 1) - 1)*A)) = dv((start_Ft_a_s - 1) + (a + (((s-1) + 1) - 1)*A)) * (1 - dv((start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + (((s-1) + 1) - 1)*A*(T+1)))) + dv((start_Td_a_s - 1) + (a + (s - 1)*A)) + (dv((start_Tw_a_s - 1) + (a + (s - 1)*A)) + dv((start_Te_a_s - 1) + (a + (s - 1)*A))) * (1 - dv((start_x_a_t_s - 1) + (a + ((R + 1) - 1)*A + ((s + 1) - 1)*A*(T+1))));
-        end
-    end
-
-    %? tfinS_t_a1_s1_a2_s2
-    %* Depends on: tfin_a_s, S_t_a1_s1_a2_s2
-    for t = 1:T
-        if t ~= R
-            % Synchronization constraints could be applied only to tasks that have a specified number of robots
-            if Task(t).N ~= 0
-                for a1 = 1:A
-                    for s1 = 1:S
-                        for a2 = 1:A
-                            if a1 ~= a2
-                                for s2 = 1:S
-                                    % tfin(a1,s1)*S(t,a1,s1,a2,s2) -> tfinS(1,t,a1,s1,a2,s2)
-                                    dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) * dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
-
-                                    % tfin(a2,s2)*S(t,a1,s1,a2,s2) -> tfinS(2,t,a1,s1,a2,s2)
-                                    dv((start_tfinS_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) * dv((start_S_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    %? tfinR_t_a1_s1_a2_s2
-    %* Depends on: tfin_a_s, R_t_a1_s1_a2_s2
-    %? TeR_t_a1_s1_a2_s2
-    %* Depends on: Te_a_s, R_t_a1_s1_a2_s2
-    for t = 1:T
-        if t ~= R
-            % Relay constraints could be applied only to relayable tasks
-            if Task(t).Relayability == 1
-                for a1 = 1:A
-                    for s1 = 1:S
-                        for a2 = 1:A
-                            for s2 = 1:S
-                                if not(a1 == a2 && s1 == s2)
-                                    % tfin(a1,s1)*R(t,a1,s1,a2,s2) -> tfinR(1,t,a1,s1,a2,s2)
-                                    dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (1 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a1 + ((s1 + 1) - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
-
-                                    % tfin(a2,s2)*R(t,a1,s1,a2,s2) -> tfinR(2,t,a1,s1,a2,s2)
-                                    dv((start_tfinR_t_a1_s1_a2_s2 - 1) + (2 + ((t - 1) - 1)*2 + (a1 - 1)*2*(T-1) + (s1 - 1)*2*(T-1)*A + (a2 - 1)*2*(T-1)*A*S + (s2 - 1)*2*(T-1)*A*S*A)) = dv((start_tfin_a_s - 1) + (a2 + ((s2 + 1) - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
-
-                                    % Te(a2,s2)*R(t,a1,s1,a2,s2)   -> TeR(t,a1,s1,a2,s2)
-                                    dv((start_TeR_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A)) = dv((start_Te_a_s - 1) + (a2 + (s2 - 1)*A)) * dv((start_R_t_a1_s1_a2_s2 - 1) + ((t - 1) + (a1 - 1)*(T-1) + (s1 - 1)*(T-1)*A + (a2 - 1)*(T-1)*A*S + (s2 - 1)*(T-1)*A*S*A));
-                                end
-                            end
-                        end
-                    end
-                end
-            end
         end
     end
 end
@@ -937,38 +956,42 @@ function [a2, s2] = geta2s2(a, s, A, S, coord_type_ind, S_t_a1_s1_a2_s2, R_t_a1_
 end
 
 %% Coordinate two slots
-function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(a, s, a2, s2, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag)
-    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(a, s, a2, s2, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, constant_scenario_values, tol, iteration_idx, print_coord_steps_flag)
+    A = constant_scenario_values.A;
+    T = constant_scenario_values.T;
+    S = constant_scenario_values.S;
+    N = constant_scenario_values.N;
+    R = constant_scenario_values.R;
 
     % Get all dv start and length information
-    [start_z                   length_z                   ...
-     start_x_a_t_s             length_x_a_t_s             ...
-     start_xx_a_t_t_s          length_xx_a_t_t_s          ...
-     start_V_t                 length_V_t                 ...
-     start_n_t                 length_n_t                 ...
-     start_na_t                length_na_t                ...
-     start_nq_t                length_nq_t                ...
-     start_nq_a_t              length_nq_a_t              ...
-     start_nf_t                length_nf_t                ...
-     start_nf_t_nf             length_nf_t_nf             ...
-     start_nfx_a_nf_t_s        length_nfx_a_nf_t_s        ...
-     start_naf_t_nf            length_naf_t_nf            ...
-     start_nax_a_t_s           length_nax_a_t_s           ...
-     start_Ft_a_s              length_Ft_a_s              ...
-     start_Ftx_a_s1            length_Ftx_a_s1            ...
-     start_tfin_a_s            length_tfin_a_s            ...
-     start_tfinx_a_t_s         length_tfinx_a_t_s         ...
-     start_d_tmax_tfin_a_s     length_d_tmax_tfin_a_s     ...
-     start_s_used              length_s_used              ...
-     start_Td_a_s              length_Td_a_s              ...
-     start_Tw_a_s              length_Tw_a_s              ...
-     start_Twx_a_s             length_Twx_a_s             ...
-     start_Te_a_s              length_Te_a_s              ...
-     start_S_t_a1_s1_a2_s2     length_S_t_a1_s1_a2_s2     ...
-     start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2 ...
-     start_R_t_a1_s1_a2_s2     length_R_t_a1_s1_a2_s2     ...
-     start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2 ...
-     start_TeR_t_a1_s1_a2_s2   length_TeR_t_a1_s1_a2_s2      ] = extractStartLengthInformation(dv_start_length);
+    [~,                     ~, ...
+     start_x_a_t_s,         ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     start_tfin_a_s,        ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     ~,                     ~, ...
+     start_Tw_a_s,          ~, ...
+     ~,                     ~, ...
+     start_Te_a_s,          ~, ...
+     start_S_t_a1_s1_a2_s2, ~, ...
+     ~,                     ~, ...
+     start_R_t_a1_s1_a2_s2, ~, ...
+     ~,                     ~, ...
+     ~,                     ~] = extractStartLengthInformation(dv_start_length);
 
     a0 = a;
     s0 = s;
@@ -1076,7 +1099,7 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
                 end
             end
 
-            dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
+            dv = updateTfin(dv, dv_start_length, constant_scenario_values);
 
             iteration_idx = iteration_idx + 1;
             if print_coord_steps_flag
@@ -1105,7 +1128,7 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
                     % Note that it is possible to have at the same time any(R(:, a, s, :, :)) and any(R(:, :, :, a, s)), but not to the same other slot
                     coord_type_ind_before = 1 * any(S_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb)) + 10 * any(R_t_a1_s1_a2_s2_coordinated(:, aw, sw, ab, sb)) + 100 * any(R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sw));
                     if coord_type_ind_before
-                        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
+                        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, constant_scenario_values, tol, iteration_idx, print_coord_steps_flag);
                     end
                 end
             end
@@ -1115,9 +1138,10 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
             for sd = sw+1:S
                 for sb = 1:S
                     for ab = 1:A
+                        %! Next is the (1) most time consuming line in this code right now
                         coord_type_ind_before = 1 * any(S_t_a1_s1_a2_s2_coordinated(:, aw, sd, ab, sb)) + 10 * any(R_t_a1_s1_a2_s2_coordinated(:, aw, sd, ab, sb)) + 100 * any(R_t_a1_s1_a2_s2_coordinated(:, ab, sb, aw, sd));
                         if coord_type_ind_before
-                            [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sd, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
+                            [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sd, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, constant_scenario_values, tol, iteration_idx, print_coord_steps_flag);
                         end
                     end
                 end
@@ -1169,38 +1193,42 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
 end
 
 %% Coordinate again
-function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag)
-    [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
+function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateAgain(aw, sw, ab, sb, coord_type_ind_before, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, constant_scenario_values, tol, iteration_idx, print_coord_steps_flag)
+    A = constant_scenario_values.A;
+    T = constant_scenario_values.T;
+    S = constant_scenario_values.S;
+    N = constant_scenario_values.N;
+    R = constant_scenario_values.R;
     
     % Get all dv start and length information
-    [start_z                   length_z                   ...
-     start_x_a_t_s             length_x_a_t_s             ...
-     start_xx_a_t_t_s          length_xx_a_t_t_s          ...
-     start_V_t                 length_V_t                 ...
-     start_n_t                 length_n_t                 ...
-     start_na_t                length_na_t                ...
-     start_nq_t                length_nq_t                ...
-     start_nq_a_t              length_nq_a_t              ...
-     start_nf_t                length_nf_t                ...
-     start_nf_t_nf             length_nf_t_nf             ...
-     start_nfx_a_nf_t_s        length_nfx_a_nf_t_s        ...
-     start_naf_t_nf            length_naf_t_nf            ...
-     start_nax_a_t_s           length_nax_a_t_s           ...
-     start_Ft_a_s              length_Ft_a_s              ...
-     start_Ftx_a_s1            length_Ftx_a_s1            ...
-     start_tfin_a_s            length_tfin_a_s            ...
-     start_tfinx_a_t_s         length_tfinx_a_t_s         ...
-     start_d_tmax_tfin_a_s     length_d_tmax_tfin_a_s     ...
-     start_s_used              length_s_used              ...
-     start_Td_a_s              length_Td_a_s              ...
-     start_Tw_a_s              length_Tw_a_s              ...
-     start_Twx_a_s             length_Twx_a_s             ...
-     start_Te_a_s              length_Te_a_s              ...
-     start_S_t_a1_s1_a2_s2     length_S_t_a1_s1_a2_s2     ...
-     start_tfinS_t_a1_s1_a2_s2 length_tfinS_t_a1_s1_a2_s2 ...
-     start_R_t_a1_s1_a2_s2     length_R_t_a1_s1_a2_s2     ...
-     start_tfinR_t_a1_s1_a2_s2 length_tfinR_t_a1_s1_a2_s2 ...
-     start_TeR_t_a1_s1_a2_s2   length_TeR_t_a1_s1_a2_s2      ] = extractStartLengthInformation(dv_start_length);
+    [~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     start_tfin_a_s, ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     start_Te_a_s,   ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~, ...
+     ~,              ~] = extractStartLengthInformation(dv_start_length);
 
     infinite_loop_flag = false;
 
@@ -1233,10 +1261,10 @@ function [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t
             error('Missing case in switch statement.');
         end
 
-        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
+        dv = updateTfin(dv, dv_start_length, constant_scenario_values);
 
-        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(aw, sw, ab, sb, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, Agent, Task, tol, iteration_idx, print_coord_steps_flag);
+        [dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, infinite_loop_flag, iteration_idx] = coordinateTwoSlots(aw, sw, ab, sb, dv, S_t_a1_s1_a2_s2, R_t_a1_s1_a2_s2, S_t_a1_s1_a2_s2_coordinated, R_t_a1_s1_a2_s2_coordinated, dv_start_length, constant_scenario_values, tol, iteration_idx, print_coord_steps_flag);
 
-        dv = updateTwDependentVariables(dv, dv_start_length, Agent, Task);
+        dv = updateTfin(dv, dv_start_length, constant_scenario_values);
     end
 end

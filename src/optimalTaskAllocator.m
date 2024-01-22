@@ -36,6 +36,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     %   - 2. Save best so far, display iter.
     %   - 3. Stop at first valid solution, display off.
     %   - 4. No output function, display off
+    %   - 5. Save all found integer solutions, with iter
     if nargin < 7 || isempty(solver_config)
         solver_config = 0;
     end
@@ -236,163 +237,66 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     [dv_start_length, length_dv] = getStartLengthInformation(Agent, Task);
 
     % Get all dv start and length information
-    [start_z                  , ~                     , ...
-     start_x_a_t_s            , length_x_a_t_s        , ...
-     start_xx_a_t_t_s         , length_xx_a_t_t_s     , ...
-     start_V_t                , length_V_t            , ...
-     start_n_t                , length_n_t            , ...
-     start_na_t               , length_na_t           , ...
-     start_nq_t               , length_nq_t           , ...
-     start_nq_a_t             , length_nq_a_t         , ...
-     start_nf_t               , length_nf_t           , ...
-     start_nf_t_nf            , length_nf_t_nf        , ...
-     start_nfx_a_nf_t_s       , length_nfx_a_nf_t_s   , ...
-     start_naf_t_nf           , length_naf_t_nf       , ...
-     start_nax_a_t_s          , length_nax_a_t_s      , ...
-     start_Ft_a_s             , ~                     , ...
-     start_Ftx_a_s1           , length_Ftx_a_s1       , ...
-     start_tfin_a_s           , ~                     , ...
-     start_tfinx_a_t_s        , ~                     , ...
-     start_d_tmax_tfin_a_s    , length_d_tmax_tfin_a_s, ...
-     start_s_used             , length_s_used         , ...
-     start_Td_a_s             , length_Td_a_s         , ...
-     start_Tw_a_s             , length_Tw_a_s         , ...
-     start_Twx_a_s            , length_Twx_a_s        , ...
-     start_Te_a_s             , length_Te_a_s         , ...
-     start_S_t_a1_s1_a2_s2    , length_S_t_a1_s1_a2_s2, ...
-     start_tfinS_t_a1_s1_a2_s2, ~                     , ...
-     start_R_t_a1_s1_a2_s2    , length_R_t_a1_s1_a2_s2, ...
-     start_tfinR_t_a1_s1_a2_s2, ~                     , ...
-     start_TeR_t_a1_s1_a2_s2  , length_TeR_t_a1_s1_a2_s2] = extractStartLengthInformation(dv_start_length);
+    [start_z,                   ~,                      ...
+     start_x_a_t_s,             length_x_a_t_s,         ...
+     start_xx_a_t_t_s,          length_xx_a_t_t_s,      ...
+     start_V_t,                 length_V_t,             ...
+     start_n_t,                 length_n_t,             ...
+     start_na_t,                length_na_t,            ...
+     start_nq_t,                length_nq_t,            ...
+     start_nq_a_t,              length_nq_a_t,          ...
+     start_nf_t,                length_nf_t,            ...
+     start_nf_t_nf,             length_nf_t_nf,         ...
+     start_nfx_a_nf_t_s,        length_nfx_a_nf_t_s,    ...
+     start_naf_t_nf,            length_naf_t_nf,        ...
+     start_nax_a_t_s,           length_nax_a_t_s,       ...
+     start_Ft_a_s,              ~,                      ...
+     start_Ftx_a_s1,            length_Ftx_a_s1,        ...
+     start_tfin_a_s,            ~,                      ...
+     start_tfinx_a_t_s,         ~,                      ...
+     start_d_tmax_tfin_a_s,     length_d_tmax_tfin_a_s, ...
+     start_s_used,              length_s_used,          ...
+     start_Td_a_s,              length_Td_a_s,          ...
+     start_Tw_a_s,              length_Tw_a_s,          ...
+     start_Twx_a_s,             length_Twx_a_s,         ...
+     start_Te_a_s,              length_Te_a_s,          ...
+     start_S_t_a1_s1_a2_s2,     length_S_t_a1_s1_a2_s2, ...
+     start_tfinS_t_a1_s1_a2_s2, ~,                      ...
+     start_R_t_a1_s1_a2_s2,     length_R_t_a1_s1_a2_s2, ...
+     start_tfinR_t_a1_s1_a2_s2, ~,                      ...
+     start_TeR_t_a1_s1_a2_s2,   length_TeR_t_a1_s1_a2_s2] = extractStartLengthInformation(dv_start_length);
 
-    % Maximum number of sparse terms per decision variable
-    N_Hard_eq_sparse_terms            = (T - 1) * 1;
-    Non_decomposable_eq_sparse_terms  = (T - 1) * 1;
-    Td_a_s_eq_sparse_terms            = (A * S) * (1 + (T * (T + 1)) * 1);
-    Te_a_s_eq_sparse_terms            = (A * S) * (1 + (T * N) * 1);
-    z_ineq_sparse_terms               = A * 2;
-    n_t_eq_sparse_terms               = T * (1 + (A * S) * 1);
-    nf_t_nf_eq_sparse_terms           = T * ((1 + N * 1) + N * 1);
-    nq_t_eq_sparse_terms              = T * (1 + A * 1);
-    nq_a_t_ineq_sparse_terms          = (A * T) * (S * 2 + (1 + S * 1));
-    na_nq_t_ineq_sparse_terms         = T * 2;
-    na_nf_n_t_eq_sparse_terms         = T * (1 + N * 1);
-    naf_t_nf_ineq_sparse_terms        = (T * N) * 10;
-    d_tmax_tfin_a_s_ineq_sparse_terms = (A * S) * (T * 2 + 1);
-    t_fin_a_s_eq_sparse_terms         = A * (1 + S * (4 + T * 1));
-    Ft_a_s_ineq_sparse_terms          = (A * S) * 1;
-    Ft_a_s_eq_sparse_terms            = A * (1 + S * (6 + (T - 1) * N * 1));
-    V_t_eq_sparse_terms               = (T - 1) * 2;
-    recharge_ineq_sparse_terms        = A * 1 * (S - 1) * 2;
-    hardware_ineq_sparse_terms        = A * T * S * 1;
-    max_ineq_sparse_terms             = A * S * 1 * (T+1);
-    continuity_ineq_sparse_terms      = A * (S - 1) * 2 * T;
-    s_used_eq_sparse_terms            = 1 + A * (T+1) * (S+1);
-    synch_eq_sparse_terms             = ((T - 1) * A * S) * ((A * S) * (2 + 2) + (2 + (A * S) * 1));
-    synch_ineq_sparse_terms           = ((T - 1) * A * S * A * S) * (2 + 2 + 20);
-    relays_eq_sparse_terms            = (T - 1) * (2 + (A * S * A * S) * (3 + 1));
-    relays_ineq_sparse_terms          = ((T - 1) * A * S * A * S) * (2 + 2 + 30 + 1 + 1);
-    linearizations_ineq_sparse_terms  = (A * S * (T * ((T + 1) * 7 + N * 7 + 20) + 20));
-
-    % Max number of sparse terms in the matrixes
-    max_eq_sparse_terms = N_Hard_eq_sparse_terms + Non_decomposable_eq_sparse_terms + Td_a_s_eq_sparse_terms + Te_a_s_eq_sparse_terms + n_t_eq_sparse_terms + nf_t_nf_eq_sparse_terms + nq_t_eq_sparse_terms + na_nf_n_t_eq_sparse_terms + t_fin_a_s_eq_sparse_terms + Ft_a_s_eq_sparse_terms + V_t_eq_sparse_terms + s_used_eq_sparse_terms + synch_eq_sparse_terms + relays_eq_sparse_terms;
-    max_ineq_sparse_terms = z_ineq_sparse_terms + nq_a_t_ineq_sparse_terms + na_nq_t_ineq_sparse_terms + naf_t_nf_ineq_sparse_terms + d_tmax_tfin_a_s_ineq_sparse_terms + Ft_a_s_ineq_sparse_terms + recharge_ineq_sparse_terms + hardware_ineq_sparse_terms + max_ineq_sparse_terms + continuity_ineq_sparse_terms + synch_ineq_sparse_terms + relays_ineq_sparse_terms + linearizations_ineq_sparse_terms;
-
-    % Maximum number of independent terms per decision variable
-    N_Hard_eq_independent_sparse_terms            = 0;
-    Non_decomposable_eq_independent_sparse_terms  = (T - 1) * 1;
-    Td_a_s_eq_independent_sparse_terms            = 0;
-    Te_a_s_eq_independent_sparse_terms            = 0;
-    z_ineq_independent_sparse_terms               = 0;
-    n_t_eq_independent_sparse_terms               = 0;
-    nf_t_nf_eq_independent_sparse_terms           = T * 1;
-    nq_t_eq_independent_sparse_terms              = 0;
-    nq_a_t_ineq_independent_sparse_terms          = 0;
-    na_nq_t_ineq_independent_sparse_terms         = 0;
-    na_nf_n_t_eq_independent_sparse_terms         = 0;
-    naf_t_nf_ineq_independent_sparse_terms        = (T * N) * 2;
-    d_tmax_tfin_a_s_ineq_independent_sparse_terms = 0;
-    t_fin_a_s_eq_independent_sparse_terms         = 0;
-    Ft_a_s_ineq_independent_sparse_terms          = (A * S) * 1;
-    Ft_a_s_eq_independent_sparse_terms            = A * 1;
-    V_t_eq_independent_sparse_terms               = (T - 1) * 1;
-    recharge_ineq_independent_sparse_terms        = A * 1 * (S - 1) * 1;
-    hardware_ineq_independent_sparse_terms        = A * T * S * 1;
-    max_ineq_independent_sparse_terms             = A * S * 1;
-    continuity_ineq_independent_sparse_terms      = 0;
-    s_used_eq_independent_sparse_terms            = 1;
-    synch_eq_independent_sparse_terms             = 0;
-    synch_ineq_independent_sparse_terms           = ((T - 1) * A * S * A * S) * 4;
-    relays_eq_independent_sparse_terms            = 0;
-    relays_ineq_independent_sparse_terms          = ((T - 1) * A * S) * ((A * S) * 6 + 2);
-    linearizations_ineq_independent_sparse_terms  = (A * S * (T * ((T + 1) * 1 + N * 1 + 4) + 4));
-
-    % Max number of sparse terms in the independent terms
-    max_eq_independent_sparse_terms = N_Hard_eq_independent_sparse_terms + Non_decomposable_eq_independent_sparse_terms + Td_a_s_eq_independent_sparse_terms + Te_a_s_eq_independent_sparse_terms + n_t_eq_independent_sparse_terms + nf_t_nf_eq_independent_sparse_terms + nq_t_eq_independent_sparse_terms + na_nf_n_t_eq_independent_sparse_terms + t_fin_a_s_eq_independent_sparse_terms + Ft_a_s_eq_independent_sparse_terms + V_t_eq_independent_sparse_terms + s_used_eq_independent_sparse_terms + synch_eq_independent_sparse_terms + relays_eq_independent_sparse_terms;
-    max_ineq_independent_sparse_terms = z_ineq_independent_sparse_terms + nq_a_t_ineq_independent_sparse_terms + na_nq_t_ineq_independent_sparse_terms + naf_t_nf_ineq_independent_sparse_terms + d_tmax_tfin_a_s_ineq_independent_sparse_terms + Ft_a_s_ineq_independent_sparse_terms + recharge_ineq_independent_sparse_terms + hardware_ineq_independent_sparse_terms + max_ineq_independent_sparse_terms + continuity_ineq_independent_sparse_terms + synch_ineq_independent_sparse_terms + relays_ineq_independent_sparse_terms + linearizations_ineq_independent_sparse_terms;
-
-    % Maximum number of equations per decision variable
-    N_Hard_eq            = (T - 1) * 1;
-    Non_decomposable_eq  = (T - 1) * 1;
-    Td_a_s_eq            = (A * S) * 1;
-    Te_a_s_eq            = (A * S) * 1;
-    z_ineq               = A * 1;
-    n_t_eq               = T * 1;
-    nf_t_nf_eq           = T * (1 + 1);
-    nq_t_eq              = T * 1;
-    nq_a_t_ineq          = (A * T) * (S * 1 + 1);
-    na_nq_t_ineq         = T * 1;
-    na_nf_n_t_eq         = T * 1;
-    naf_t_nf_ineq        = (T * N) * 4;
-    d_tmax_tfin_a_s_ineq = (A * S) * 1;
-    t_fin_a_s_eq         = A * (1 + S * 1);
-    Ft_a_s_ineq          = (A * S) * 1;
-    Ft_a_s_eq            = A * (1 + S * 1);
-    V_t_eq               = (T - 1) * 1;
-    recharge_ineq        = A * 1 * (S - 1) * 1;
-    hardware_ineq        = A * T * S * 1;
-    max1task_ineq        = A * S * 1;
-    continuity_ineq      = A * (S - 1) * 1;
-    s_used_eq            = 1;
-    synch_eq             = ((T - 1) * A * S) * ((A * S) * (1 + 1) + 1);
-    synch_ineq           = ((T - 1) * A * S * A * S) * (1 + 1 + 8);
-    relays_eq            = (T - 1) * ((A * S * A * S) * 1 + 1);
-    relays_ineq          = ((T - 1) * A * S) * ((A * S) * (1 + 1 + 12) + 1 + 1);
-    linearizations_ineq  = (A * S * (T * ((T + 1) * 3 + N * 3 + 8) + 8));
-
-    % Max number of equations (rows in A and Aeq)
-    max_eq = N_Hard_eq + Non_decomposable_eq + Td_a_s_eq + Te_a_s_eq + n_t_eq + nf_t_nf_eq + nq_t_eq + na_nf_n_t_eq + t_fin_a_s_eq + Ft_a_s_eq + V_t_eq + s_used_eq + synch_eq + relays_eq;
-    max_ineq = z_ineq + nq_a_t_ineq + na_nq_t_ineq + naf_t_nf_ineq + d_tmax_tfin_a_s_ineq + Ft_a_s_ineq + recharge_ineq + hardware_ineq + max1task_ineq + continuity_ineq + synch_ineq + relays_ineq + linearizations_ineq;
-
-    % Start index for each equation
-    start_N_Hard_eq            = 1;
-    start_Non_decomposable_eq  = start_N_Hard_eq            + N_Hard_eq;
-    start_Td_a_s_eq            = start_Non_decomposable_eq  + Non_decomposable_eq;
-    start_Te_a_s_eq            = start_Td_a_s_eq            + Td_a_s_eq;
-    start_n_t_eq               = start_Te_a_s_eq            + Te_a_s_eq;
-    start_nf_t_nf_eq           = start_n_t_eq               + n_t_eq;
-    start_nq_t_eq              = start_nf_t_nf_eq           + nf_t_nf_eq;
-    start_na_nf_n_t_eq         = start_nq_t_eq              + nq_t_eq;
-    start_t_fin_a_s_eq         = start_na_nf_n_t_eq         + na_nf_n_t_eq;
-    start_Ft_a_s_eq            = start_t_fin_a_s_eq         + t_fin_a_s_eq;
-    start_V_t_eq               = start_Ft_a_s_eq            + Ft_a_s_eq;
-    start_s_used_eq            = start_V_t_eq               + V_t_eq;
-    start_synch_eq             = start_s_used_eq            + s_used_eq;
-    start_relays_eq            = start_synch_eq             + synch_eq;
-
-    start_z_ineq               = 1;
-    start_nq_a_t_ineq          = start_z_ineq               + z_ineq;
-    start_na_nq_t_ineq         = start_nq_a_t_ineq          + nq_a_t_ineq;
-    start_naf_t_nf_ineq        = start_na_nq_t_ineq         + na_nq_t_ineq;
-    start_d_tmax_tfin_a_s_ineq = start_naf_t_nf_ineq        + naf_t_nf_ineq;
-    start_Ft_a_s_ineq          = start_d_tmax_tfin_a_s_ineq + d_tmax_tfin_a_s_ineq;
-    start_recharge_ineq        = start_Ft_a_s_ineq          + Ft_a_s_ineq;
-    start_hardware_ineq        = start_recharge_ineq        + recharge_ineq;
-    start_max1task_ineq        = start_hardware_ineq        + hardware_ineq;
-    start_continuity_ineq      = start_max1task_ineq        + max1task_ineq;
-    start_synch_ineq           = start_continuity_ineq      + continuity_ineq;
-    start_relays_ineq          = start_synch_ineq           + synch_ineq;
-    start_linearizations_ineq  = start_relays_ineq          + relays_ineq;
+    % Get sparse matrix information
+    [~, ...
+     max_eq,   max_eq_sparse_terms,   max_eq_independent_sparse_terms,   ...
+     max_ineq, max_ineq_sparse_terms, max_ineq_independent_sparse_terms, ...
+     start_N_Hard_eq,            ...
+     start_Non_decomposable_eq,  ...
+     start_Td_a_s_eq,            ...
+     start_Te_a_s_eq,            ...
+     start_n_t_eq,               ...
+     start_nf_t_nf_eq,           ...
+     start_nq_t_eq,              ...
+     start_na_nf_n_t_eq,         ...
+     start_t_fin_a_s_eq,         ...
+     start_Ft_a_s_eq,            ...
+     start_V_t_eq,               ...
+     start_s_used_eq,            ...
+     start_synch_eq,             ...
+     start_relays_eq,            ...
+     start_z_ineq,               ...
+     start_nq_a_t_ineq,          ...
+     start_na_nq_t_ineq,         ...
+     start_naf_t_nf_ineq,        ...
+     start_d_tmax_tfin_a_s_ineq, ...
+     start_Ft_a_s_ineq,          ...
+     start_recharge_ineq,        ...
+     start_hardware_ineq,        ...
+     start_max1task_ineq,        ...
+     start_continuity_ineq,      ...
+     start_synch_ineq,           ...
+     start_relays_ineq,          ...
+     start_linearizations_ineq] = getSparseMatrixInformation(Agent, Task);
 
     % Objective function equations: memory is reserved for the maximum expected number of sparse elements
     A_double_sparse   = spalloc(max_ineq, length_dv, max_ineq_sparse_terms);
@@ -540,13 +444,19 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % Call initializer
     if initialize_flag
         if isempty(old_executed_random_scenario_id)
-            x0 = initializer(Agent, Task);
+            [init_sol, ~, ~] = initializer(Agent, Task, 2, true, false);
         else
-            x0 = initializer(old_executed_random_scenario_id);
+            [init_sol, ~, ~] = initializer(old_executed_random_scenario_id, execution_id, 2, true, false);
         end
 
-        if isempty(x0)
+        if isempty(init_sol)
             disp('Initializer wasn''t able to find a solution');
+        end
+
+        if length(init_sol) == length_dv
+            x0 = init_sol;
+        else
+            disp('Initializer''s solution use more than S slots');
         end
     end
 
@@ -2272,10 +2182,10 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
         % Decompose fval into each objective function term associated fval
         if log_file_flag
-            f_term_1  = zeros(1,length_dv);
-            f_term_2  = zeros(1,length_dv);
-            f_term_3  = zeros(1,length_dv);
-            f_term_4  = zeros(1,length_dv);
+            f_term_1  = sparse(1,length_dv);
+            f_term_2  = sparse(1,length_dv);
+            f_term_3  = sparse(1,length_dv);
+            f_term_4  = sparse(1,length_dv);
 
             % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
             f_term_2((start_d_tmax_tfin_a_s - 1) + 1 : (start_d_tmax_tfin_a_s - 1) + length_d_tmax_tfin_a_s) = 1/d_tmax_max;
@@ -2319,8 +2229,8 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 disp('fval fval_f1 fval_f2 fval_f3 fval_f4');
                 disp([fval fval_f1 fval_f2 fval_f3 fval_f4]);
             case 4
-                f_term_1a = zeros(1,length_dv);
-                f_term_1b = zeros(1,length_dv);
+                f_term_1a = sparse(1,length_dv);
+                f_term_1b = sparse(1,length_dv);
 
                 % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
                 f_term_1a((start_z - 1) + 1) = alpha/z_max;
@@ -2345,7 +2255,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 disp('fval fval_f1a fval_f1b fval_f2 fval_f3 fval_f4');
                 disp([fval fval_f1a fval_f1b fval_f2 fval_f3 fval_f4]);
             otherwise
-                f_term_5  = zeros(1,length_dv);
+                f_term_5  = sparse(1,length_dv);
 
                 % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
                 f_term_1((start_z - 1) + 1) = 1/z_max;
