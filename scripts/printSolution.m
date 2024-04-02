@@ -53,6 +53,15 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         length_Te_a_s = start_length(2);
         Te = reshape(sol(start_Te_a_s : start_Te_a_s + length_Te_a_s - 1), A, S);
     elseif isfield(Agent, 'queue')
+        % Get the number of used slots per robot
+        used_slots = zeros(1,A);
+        for a = 1:A
+            used_slots(a) = length(Agent(a).queue) - 1;
+        end
+
+        % Get the exact number of used slots
+        S = max(used_slots);
+
         % Extract necessary decision variables values from Agent structure
         % Extract x_a_t_s from Agent.queue
         x_a_t_s = zeros(A, T+1, S+1);
@@ -164,6 +173,7 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
     figure();
     hold on;
     barWidth = 0.8;
+    times_bar_proportion = 1/3;
 
     % Plot Agents' queue
     for a = 1:A
@@ -189,23 +199,27 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
 
         % Plot a's queue
         if not(isempty(slot_duration))
-            gantt = barh(a, slot_duration, barWidth,'stacked', 'LineWidth', 1.5);
-            times = barh(a - barWidth/4, slot_phase_duration, barWidth/2,'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0);
+            gantt = barh(a + barWidth * (1/2 - (1 - times_bar_proportion)/2), slot_duration, barWidth * (1 - times_bar_proportion), 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0.75);
+            times = barh(a + barWidth * (times_bar_proportion/2 - 1/2), slot_phase_duration, barWidth * times_bar_proportion, 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0.75, 'EdgeAlpha', 0);
+            box   = barh(a, slot_duration, barWidth, 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0);
 
             % Change tasks colors and add task name
             for s = 1:S
                 for t = 1:T
                     if x_a_t_s(a,t + 1,s + 1)
                         gantt(s).FaceColor = Task(t).color;
-                        text(gantt(s).YEndPoints - gantt(s).YData/2, gantt(s).XEndPoints + gantt(s).BarWidth/4, Task(t).name, 'FontSize', 16, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        if slot_phase_duration(3*(s-1) + 1)
-                            text(times((s-1)*3+1).YEndPoints - times((s-1)*3+1).YData/2, times((s-1)*3+1).XEndPoints, 'T^d', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                        text(gantt(s).YEndPoints - gantt(s).YData/2, gantt(s).XEndPoints, Task(t).name, 'FontSize', 16, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                        if slot_phase_duration(3*(s-1) + 1) > tol
+                            times((s-1)*3+1).FaceColor = [0 0 1];
+                            % text(times((s-1)*3+1).YEndPoints - times((s-1)*3+1).YData/2, times((s-1)*3+1).XEndPoints, 'T^d', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
                         end
-                        if slot_phase_duration(3*(s-1) + 2)
-                            text(times((s-1)*3+2).YEndPoints - times((s-1)*3+2).YData/2, times((s-1)*3+2).XEndPoints, 'T^w', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                        if slot_phase_duration(3*(s-1) + 2) > tol
+                            times((s-1)*3+2).FaceColor = [1 1 0];
+                            % text(times((s-1)*3+2).YEndPoints - times((s-1)*3+2).YData/2, times((s-1)*3+2).XEndPoints, 'T^w', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
                         end
-                        if slot_phase_duration(3*(s-1) + 3)
-                            text(times((s-1)*3+3).YEndPoints - times((s-1)*3+3).YData/2, times((s-1)*3+3).XEndPoints, 'T^e', 'FontSize', 14, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                        if slot_phase_duration(3*(s-1) + 3) > tol
+                            times((s-1)*3+3).FaceColor = [0 1 0];
+                            % text(times((s-1)*3+3).YEndPoints - times((s-1)*3+3).YData/2, times((s-1)*3+3).XEndPoints, 'T^e', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
                         end
                     end
                 end
@@ -221,7 +235,7 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
     ylim([0.5 A+0.5]);
 
     % Set axis font size
-    set(gca,'FontSize', 16, 'XGrid', 'on', 'YGrid', 'off','xminorgrid','on');
+    set(gca,'FontSize', 16, 'FontWeight', 'bold', 'XGrid', 'off', 'YGrid', 'off','xminorgrid','off', 'TickDir', 'out');
 
     % Set title
     switch nargin

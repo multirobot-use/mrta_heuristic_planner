@@ -544,10 +544,10 @@ function [Agent, Task] = scenario(A, T, types, discretized)
                 Agent(2) = struct('name', 'Agent_2', 'type', 1, 'Ft', 14*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
                 Agent(3) = struct('name', 'Agent_3', 'type', 1, 'Ft', 60*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));
 
-                Task(1)  = struct('name', 't_R', 'Hr', [1], 'Te', 5*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.85 0.33 0.10]);
-                Task(2)  = struct('name', 't_1', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.00 0.45 0.74]);
-                Task(3)  = struct('name', 't_2', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.47 0.67 0.19]);
-                Task(4)  = struct('name', 't_3', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.93 0.69 0.13]);
+                Task(1)  = struct('name', 't_R', 'Hr', [1], 'Te', 7*60,  'tmax', 0,    'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 0, 'z', 0), 'color', [0.85 0.33 0.10]);
+                Task(2)  = struct('name', 't_1', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 0, 'y', 200, 'z', 0), 'color', [0.00 0.45 0.74]);
+                Task(3)  = struct('name', 't_2', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -100, 'y', 100, 'z', 0), 'color', [0.47 0.67 0.19]);
+                Task(4)  = struct('name', 't_3', 'Hr', [1], 'Te', 30*60, 'tmax', 90*60, 'N', 2, 'N_hardness', 1, 'Relayability', 1, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', 250, 'y', 50, 'z', 0), 'color', [0.93 0.69 0.13]);
             case 25
                 % Scenario 25: Te 20 min, 3 min battery residue, nf = 20, 3 consecutive fragments. F_saf = 0 for demo purposes
                 Agent(1) = struct('name', 'Agent_1', 'type', 1, 'Ft', 25*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', 0, 'z', 0));

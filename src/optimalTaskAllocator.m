@@ -1,4 +1,4 @@
-function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, objective_function, formulation_variants_flags, config_flags, solver_config)
+function [sol, fval, population, scores] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, objective_function, formulation_variants_flags, config_flags, solver_config)
     % Minimum required input arguments: scenario_id, execution_id
 
     % scenario_id: numeric if predefined scenario, 0 if random, not numeric if saved scenario (saved scenario ID name)
@@ -6,7 +6,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % scenario size: 1x3 vector with the number of robots (A), number of tasks (T) (without counting the recharge task) and number of different types of robots (types). Used for random generated scenarios (scenario_id == 0)
     % objective_function: integer parameter to choose between different predefined objective functions.
     % formulation_variants_flags: 1x4 logic vector (empty to use default config: complete formulation): [recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag]
-    % config_flags: 1x8 logic vector (empty to use default config): [solve_flag, initialize_flag, print_solution_flag, display_flag, log_file_flag, save_flag, test_flag, recovery_flag]
+    % config_flags: 1x9 logic vector (empty to use default config): [solve_flag, initialize_flag, genetic_algorithm_solver, print_solution_flag, display_flag, log_file_flag, save_flag, test_flag, recovery_flag]
     % solver_config: integer to choose between different solver configurations (empty or 0 to use default)
 
     last_toc = toc;
@@ -63,6 +63,7 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         % Use default values
         solve_flag                             = true;
         initialize_flag                        = true;
+        genetic_algorithm_solver               = false;
         print_solution_flag                    = false;
         display_flag                           = false;
         log_file_flag                          = false;
@@ -71,12 +72,14 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
         recovery_flag                          = false;
     else
         solve_flag                             = config_flags(1);
-        print_solution_flag                    = config_flags(2);
-        display_flag                           = config_flags(3);
-        log_file_flag                          = config_flags(4);
-        save_flag                              = config_flags(5);
-        test_flag                              = config_flags(6);
-        recovery_flag                          = config_flags(7);
+        initialize_flag                        = config_flags(2);
+        genetic_algorithm_solver               = config_flags(3);
+        print_solution_flag                    = config_flags(4);
+        display_flag                           = config_flags(5);
+        log_file_flag                          = config_flags(6);
+        save_flag                              = config_flags(7);
+        test_flag                              = config_flags(8);
+        recovery_flag                          = config_flags(9);
     end
 
     % Set save_flag to 1 if scenario is gonna be randomly generated and print_solution_flag is off to be able later to load the scenario information to print the solution manually
@@ -444,19 +447,23 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     % Call initializer
     if initialize_flag
         if isempty(old_executed_random_scenario_id)
-            [init_sol, ~, ~] = initializer(Agent, Task, 2, true, false);
+            [init_Agent, init_Task, allocation_order, init_S_R] = initializer(Agent, Task, 2, 2);
         else
-            [init_sol, ~, ~] = initializer(old_executed_random_scenario_id, execution_id, 2, true, false);
+            [init_Agent, init_Task, allocation_order, init_S_R] = initializer(old_executed_random_scenario_id, execution_id, 2, 2);
         end
 
-        if isempty(init_sol)
+        % Compute the solution array
+        [init_sol, ~, ~] = buildSolutionArray(init_S_R, init_Agent, init_Task, objective_function, scenario_id, false);
+
+        if checkSolution(init_sol, init_Agent, init_Task)
+            % Check if initializer solution can be used as initial solution
+            if length(init_sol) == length_dv
+                x0 = init_sol;
+            else
+                disp('Initializer''s solution use more than S slots');
+            end
+        else
             disp('Initializer wasn''t able to find a solution');
-        end
-
-        if length(init_sol) == length_dv
-            x0 = init_sol;
-        else
-            disp('Initializer''s solution use more than S slots');
         end
     end
 
@@ -2108,26 +2115,32 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     %% Solver
     last_toc = toc;
 
-    % Solver settings: see https://es.mathworks.com/help/optim/ug/intlinprog.html#btv2x05
-    switch solver_config
-    case 1
-        % Save best solution so far while solving
-        options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @saveBestSolutionSoFar);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
-    case 2
-        % Save best solution so far while solving, with iter info
-        options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @saveBestSolutionSoFar);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
-    case 3
-        % Stop when the first valid solution is found
-        options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @stopAtFirstValidSolution);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
-    case 4
-        % No output function, display off
-        options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
-    case 5
-        % Save all found integer solutions, with iter
-        options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', 1*24*60*60, 'MaxNodes', inf, 'OutputFcn', @savemilpsolutions);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
-    otherwise
-        % No output function
-        options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+    % Solver settings
+    if genetic_algorithm_solver
+        % GA solver options: see https://es.mathworks.com/help/gads/genetic-algorithm-options.html
+        options = optimoptions('ga', 'UseVectorized', true, 'UseParallel', true, 'PlotFcn', @gaplotbestf);
+    else
+        % Matlab/Gurobi MILP solver options: : see https://es.mathworks.com/help/optim/ug/intlinprog.html#btv2x05
+        switch solver_config
+        case 1
+            % Save best solution so far while solving
+            options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @saveBestSolutionSoFar);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+        case 2
+            % Save best solution so far while solving, with iter info
+            options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @saveBestSolutionSoFar);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+        case 3
+            % Stop when the first valid solution is found
+            options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @stopAtFirstValidSolution);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+        case 4
+            % No output function, display off
+            options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+        case 5
+            % Save all found integer solutions, with iter
+            options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', 1*24*60*60, 'MaxNodes', inf, 'OutputFcn', @savemilpsolutions);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+        otherwise
+            % No output function
+            options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+        end
     end
 
     if not(solve_flag)
@@ -2151,6 +2164,8 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
 
                 sol = [];
                 fval = 0;
+                population = [];
+                scores = [];
                 return;
             end
         end
@@ -2159,11 +2174,25 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
     if test_flag
         sol = [];
         fval = 0;
+        population = [];
+        scores = [];
         return;
     end
     
     % Solver call
-    [sol, fval, exitflag, output] = intlinprog(f, intcon, A_double_sparse, b_double_sparse, Aeq_double_sparse, beq_double_sparse, lb, ub, x0, options);
+    if genetic_algorithm_solver
+        % Define the function to compute the fitness values
+        fun = @(dv)(f*dv');
+        % Call Matlab GA solver
+        [sol, fval, exitflag, output, population, scores] = ga(fun, length_dv, A_double_sparse, b_double_sparse, Aeq_double_sparse, beq_double_sparse, lb, ub, [], intcon, options);
+    else
+        % Call Matlab/Gurobi MILP solver
+        [sol, fval, exitflag, output] = intlinprog(f, intcon, A_double_sparse, b_double_sparse, Aeq_double_sparse, beq_double_sparse, lb, ub, x0, options);
+
+        % Set GA extra output variables value
+        population = [];
+        scores = [];
+    end
 
     solving_time = toc - last_toc;
     if display_flag
@@ -2280,10 +2309,9 @@ function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_
                 disp('fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5');
                 disp([fval fval_f1 fval_f2 fval_f3 fval_f4 fval_f5]);
             end
+            % Add a spacing line at the end of each run in the log file
+            fprintf(logFile, '\n--------------------\n');
         end
-
-        % Add a spacing line at the end of each run in the log file
-        fprintf(logFile, '\n--------------------\n');
     end
 
     save(['../mat/sol_', execution_id, '.mat'], 'sol');

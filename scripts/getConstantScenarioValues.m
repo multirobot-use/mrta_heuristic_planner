@@ -12,12 +12,7 @@ function [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantSce
     end
 
     % Index of the Recharge task: R
-    for t = 1:T
-        if strcmp(Task(t).name, 't_R')
-            R = t;
-            break;
-        end
-    end
+    R = find(strcmp({Task.name}, 't_R'), 1);
 
     % Compute the minimum safety flight time for each robot depending on its traveling speed and the distance to the recharge station
     % Maximum distance to the recharge station from any task waypoint
@@ -130,7 +125,7 @@ function [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantSce
         end
     end
     % Add some extra fragments for slack purposes
-    slack_N = 0;;
+    slack_N = 0;
     N = N + slack_N;
 
     % Calculate Te(t,nf) matrix

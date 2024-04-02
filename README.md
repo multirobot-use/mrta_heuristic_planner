@@ -41,7 +41,7 @@ Third, the `scenario size` parameter is a 1x3 vector with the number of robots (
 
 Then, optionally, `formulation_variants_flags` parameter allows us to modify the problem to solve a scenario with a slightly different MILP formulation. It's a 1x4 logic vector corresponding to the following flags: `[recharges_allowed_flag, relays_allowed_flag, fragmentation_allowed_flag, variable_number_of_robots_allowed_flag]`. We can set this parameter to an empty array to use default config: the complete formulation. 
 
-Last, `config_flags` parameter is a 1x8 logic vector corresponding to the following option flags: `[solve_flag, initialize_flag, print_solution_flag, display_flag, log_file_flag, save_flag, test_flag, recovery_flag]`. The default configuration is used if this is set to an empty array.
+Last, `config_flags` parameter is a 1x9 logic vector corresponding to the following option flags: `[solve_flag, initialize_flag, genetic_algorithm_solver, print_solution_flag, display_flag, log_file_flag, save_flag, test_flag, recovery_flag]`. The default configuration is used if this is set to an empty array.
 
 In this way, we can run the planner to solve a ramdomly generated scenario with `3` robots, `2` tasks and `1` defferent
 type of robot like:
@@ -63,6 +63,17 @@ To solve a predefined scenario (for example scenario `1`), and moreover to do so
 [sol, fval] = optimalTaskAllocator(1, 'Test', [], 4, [1 0 0 0], []);
 ```
 Here we are running the mission planner with the fourth predefined objective function and a variant where only recharge are allowed. Task are not fragmentable nor decomposable, and the coalition size flexibility is always hard.
+
+Last, we can use the `genetic_algorithm_solver` configuration parameter to solve the MILP problem using [Matlab's GA solver](https://es.mathworks.com/help/gads/ga.html) from the Optimization Toolbox.
+```
+config_flags = [1, 0, 1, 1, 1, 0, 0, 0, 0];
+[sol, fval] = optimalTaskAllocator(scenario_id, execution_id, [], objective_function, [], config_flags, 0);
+```
+While running, you should be able to see a plot like this:
+
+<img src="https://github.com/alvcalmat/XATS/assets/74324102/4c577bf4-cb13-461c-839b-733d2a0f05d7" width="600"/>
+
+To know more about GA solver options go to [Genetic Algorithm Options](https://es.mathworks.com/help/gads/genetic-algorithm-options.html)
 
 ### Analyzing the solution
 After running the `optimalTaskAllocator()` function, we can check the values of some variables of the solution vector using the [getVarValue](scripts/getVarValue.m) script. To do so, we first need to load the information about the scenario that has just been solved:
@@ -88,10 +99,28 @@ In case that we forgot to print the solution, we can also print it manually afte
 printSolution(sol, Agent, Task, 0, 'scenario_id', 'execution_id', fval);
 ```
 
-## Check solution
-There also available a script, [checkSolution](scripts/checkSolution.m), that can be used either to check if the result if correct, if any of the soft constraints are being broken, or to manually propose a solution to the task allocation problem and see if it is a valid solution or not. This will be used in the future also to check if the heuristic proposed solutions are valid or not.
+## Heuristic planner
+The heuristic planner creates, if feasible, a solution to the specified scenario. This algorithm is contained in [initializer](src/initializer.m) and its defined as:
+```
+function [Agent, Task, allocation_order, S_R] = initializer(arg_1, arg_2, reward_coefficients, version, seed)
+```
+This heuristic method can be used to initialize the MILP solver by setting the corresponding config flag at launching time. To separately call `initializer()`, `arg_1` and `arg_2` should either be Agent and Task or a valid scenario id and optionally execution id. The second parameter, `reward_coefficients`, controls the task allocation order. `version` is used to select the method to get the task allocation order. Last, `seed` is used as allocation order in the "seed" version (input order).
+The solution to the specified scenario is added to `Agent` and `Tasks` structures. `allocation_order` output variable can be used as seed to regenerate the solution using the initializer with the "seed" version, and `S_R` output variable indicates the coordination points, needed if we want to build the complete solution array.
 
-To see an example, lets say we want to check if a handmade solution for the predefined scenario number `5` is valid or not. The first step would be to load into the workspace the scenario information:
+## Build solution
+This is a tool to build the decision variable array from a handmade or heuristic solution. Its defined as follows:
+´´´
+function [dv, fval, result] = buildSolutionArray(handmade_solution, Agent, Task, objective_function, scenario_id, print_coord_steps_flag)
+´´´
+The minimum required inputs are either a handmade solution, with the key decision variables (task allocation, task fragmentation, and coordination points) and/or `Agent` and `Task` structures from the heuristic planner.
+Note: `Result` is false if the handmade solution is incorrect, true otherwise.
+
+**Note** that there may be more that one optimal solution, and as a consequence of that, the showed solution may be an equivalent solution to the one founded by the solver. Mainly, the tasks where the coordination waiting times are applied may change.
+
+## Check solution
+This tool checks if an array solution fits constraints. [checkSolution](scripts/checkSolution.m) can be used either to check if the result if correct and whether any of the soft constraints are being broken. 
+
+To see an example, lets say we want to build and check if a handmade solution for the predefined scenario number `5` is valid or not. The first step would be to load into the workspace the scenario information:
 ```
 [Agent, Task] = scenario(5);
 [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
@@ -149,22 +178,22 @@ xats_nf_S_R = [xats nf_t Sta1s1a2s2 Rta1s1a2s2];
 
 Note that `xats` is the task allocation itself. `x(a,t,s) = 1` if task `t` is assigned to slot `s` of robot `a`, `0` otherwise. `nf(t)` is the numbers of fragments that task `t` is divided into. Last `S(t, a1, s1, a2, s2)` and `R(t, a1, s1, a2, s2)` are the synchronization and relays variables, `1` if there is a coordination between a fragment of task `t` allocated in slot `s1` of agent `a1` and a fragment of task `t` assigned to slot `s2` of agent `a2`, `0` otherwise.
 
-Last, we need to call the `checkSolution()` function:
+Then, we need to call the `buildSolutionArray()` function:
 ```
-[dv_chk, fval_chk, result_chk] = checkSolution(xats_nf_S_R, Agent, Task);
+[sol, fval, result_bld] = buildSolutionArray(xats_nf_S_R, Agent, Task)
 ```
 
-We should see the solution in a bar plot like the following one:
+Last, we need to call the `checkSolution()` function:
+```
+[result_chk] = checkSolution(sol, Agent, Task);
+```
+
+If both `result_bld` and `result_chk` are true, we can visualize the solution with:
+```
+printSolution(sol, Agent, Task);
+```
 
 ![scenario5](https://github.com/multirobot-use/task_planner/assets/74324102/8c906833-db7f-49fa-91f6-fcf2c05176f7)
-
-To check a solution obtained with the solver we use the same command but changing `xats_nf_S_R` by `sol`:
-Last, we need to call the `checkSolution()` function:
-```
-[dv_chk, fval_chk, result_chk] = checkSolution(sol, Agent, Task);
-```
-
-**Note** that there may be more that one optimal solution, and as a consequence of that, the showed solution may be an equivalent solution to the one founded by the solver. Mainly, the tasks where the coordination waiting times are applied may change.
 
 ## References
 <a id="1">[1]</a>
