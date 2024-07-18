@@ -24,6 +24,7 @@ function [sol, fval, population, scores] = optimalTaskAllocator(scenario_id, exe
     %   - 2. Minimize the total joint flight time: min(sum(tfin(a,S))).
     %   - 3. Same as 1. but without used slots term.
     %   - 4. Combination of 1 and 2. Use parameters alpha and betta to give more importance to one over another.
+    %   - 5. TODO: Makespan, total joint flight time, total joint consumed battery time, coalition size deviation, deadline delays.
     if nargin < 4 || isempty(objective_function)
         objective_function = 1;
     end
@@ -444,19 +445,19 @@ function [sol, fval, population, scores] = optimalTaskAllocator(scenario_id, exe
     % Initial guess
     x0 = [];
 
-    % Call initializer
+    % Call heuristicTaskAllocator
     if initialize_flag
         if isempty(old_executed_random_scenario_id)
-            [init_Agent, init_Task, allocation_order, init_S_R] = initializer(Agent, Task, 2, 2);
+            [init_Agent, init_Task, allocation_order, init_S_R] = heuristicTaskAllocator(Agent, Task, 2, 2);
         else
-            [init_Agent, init_Task, allocation_order, init_S_R] = initializer(old_executed_random_scenario_id, execution_id, 2, 2);
+            [init_Agent, init_Task, allocation_order, init_S_R] = heuristicTaskAllocator(old_executed_random_scenario_id, execution_id, 2, 2);
         end
 
         % Compute the solution array
         [init_sol, ~, ~] = buildSolutionArray(init_S_R, init_Agent, init_Task, objective_function, scenario_id, false);
 
         if checkSolution(init_sol, init_Agent, init_Task)
-            % Check if initializer solution can be used as initial solution
+            % Check if heuristicTaskAllocator solution can be used as initial solution
             if length(init_sol) == length_dv
                 x0 = init_sol;
             else
@@ -498,6 +499,15 @@ function [sol, fval, population, scores] = optimalTaskAllocator(scenario_id, exe
         % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
         % Note: here Tw penalises twice, first in the total joint flight time term, then in the Tw term
         f((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
+    case 5
+        % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+        f((start_z - 1) + 1) = 1/z_max;
+
+        % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+        f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
+
+        % Minimize the total joint consumed battery time
+        % f() = 1/Tw_max;
     otherwise
         % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
         f((start_z - 1) + 1) = 1/z_max;
@@ -2283,6 +2293,26 @@ function [sol, fval, population, scores] = optimalTaskAllocator(scenario_id, exe
 
                 disp('fval fval_f1a fval_f1b fval_f2 fval_f3 fval_f4');
                 disp([fval fval_f1a fval_f1b fval_f2 fval_f3 fval_f4]);
+            case 5
+                % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+                f_term_1((start_z - 1) + 1) = 1/z_max;
+
+                % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+                f_term_1b((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
+                
+                % Minimize the total joint consumed battery time
+                % f_term_6() = 1/Tw_max;
+
+                fval_f1a = f_term_1a*sol;
+                fval_f1b = f_term_1b*sol;
+                % fval_f6  = f_term_6*sol;
+
+                fprintf(logFile, 'fval f    = %f s\n', fval);
+                fprintf(logFile, 'fval f_1a = %f s\n', fval_f1a);
+                fprintf(logFile, 'fval f_1b = %f s\n', fval_f1b);
+                fprintf(logFile, 'fval f_2  = %f s\n', fval_f2);
+                fprintf(logFile, 'fval f_4  = %f s\n', fval_f4);
+                % fprintf(logFile, 'fval f_6  = %f s\n', fval_f6);
             otherwise
                 f_term_5  = sparse(1,length_dv);
 

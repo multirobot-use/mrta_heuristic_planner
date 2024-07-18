@@ -52,6 +52,9 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         start_Te_a_s = start_length(1);
         length_Te_a_s = start_length(2);
         Te = reshape(sol(start_Te_a_s : start_Te_a_s + length_Te_a_s - 1), A, S);
+
+        % Initialize executed waiting times (from repaired plans)
+        exTw = zeros(A,S);
     elseif isfield(Agent, 'queue')
         % Get the number of used slots per robot
         used_slots = zeros(1,A);
@@ -129,6 +132,22 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
 
         % Substitute virtual zeros by exact zeros in Te
         Te(abs(Te) < tol) = 0;
+
+        % Initialize executed waiting times (from repaired plans)
+        exTw = zeros(A,S);
+
+        % Check if this plan has been repaired
+        if isfield(Agent, 'exTw_s')
+            % Extract Tw_a_s from Agent.Tw_s
+            for a = 1:A
+                for s = 1:S
+                    exTw(a,s) = Agent(a).exTw_s(s);
+                end
+            end
+
+            % Substitute virtual zeros by exact zeros in Tw
+            exTw(abs(exTw) < tol) = 0;
+        end
     else
         return;
     end
@@ -143,13 +162,15 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
                         repeat_flag = 0;
                         if x_a_t_s(a,t + 1,s + 1) && x_a_t_s(a,t + 1,(s+1) + 1)
                             % Join displacement, waiting and execution times
-                            Td(a,s) = Td(a,s) + Td(a,s + 1);
-                            Tw(a,s) = Tw(a,s) + Tw(a,s + 1);
-                            Te(a,s) = Te(a,s) + Te(a,s + 1);
+                            Td(a,s)   = Td(a,s)   + Td(a,s + 1);
+                            Tw(a,s)   = Tw(a,s)   + Tw(a,s + 1);
+                            Te(a,s)   = Te(a,s)   + Te(a,s + 1);
+                            exTw(a,s) = exTw(a,s) + exTw(a,s + 1);
                             % Update displacement, waiting and execution times for the slots that have been moved
-                            Td(a,s + 1:S) = [Td(a,(s+1) + 1:S), 0];
-                            Tw(a,s + 1:S) = [Tw(a,(s+1) + 1:S), 0];
-                            Te(a,s + 1:S) = [Te(a,(s+1) + 1:S), 0];
+                            Td(a,s + 1:S)   = [  Td(a,(s+1) + 1:S), 0];
+                            Tw(a,s + 1:S)   = [  Tw(a,(s+1) + 1:S), 0];
+                            Te(a,s + 1:S)   = [  Te(a,(s+1) + 1:S), 0];
+                            exTw(a,s + 1:S) = [exTw(a,(s+1) + 1:S), 0];
                             % Move the empty slot to the end
                             for slot = s+1:S-1
                                 for task = 1:T
@@ -190,11 +211,12 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         slot_duration = [slot_duration(slot_duration ~= 0)];
 
         % Compute task phase slot duration
-        slot_phase_duration = zeros(1,3*S);
+        slot_phase_duration = zeros(1,4*S);
         for s = 1:S
-                slot_phase_duration(3*(s-1) + 1) = Td(a,s);
-                slot_phase_duration(3*(s-1) + 2) = Tw(a,s);
-                slot_phase_duration(3*(s-1) + 3) = Te(a,s);
+            slot_phase_duration(4*(s-1) + 1) =   Td(a,s);
+            slot_phase_duration(4*(s-1) + 2) = exTw(a,s);
+            slot_phase_duration(4*(s-1) + 3) =   Tw(a,s);
+            slot_phase_duration(4*(s-1) + 4) =   Te(a,s);
         end
 
         % Plot a's queue
@@ -209,17 +231,21 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
                     if x_a_t_s(a,t + 1,s + 1)
                         gantt(s).FaceColor = Task(t).color;
                         text(gantt(s).YEndPoints - gantt(s).YData/2, gantt(s).XEndPoints, Task(t).name, 'FontSize', 16, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        if slot_phase_duration(3*(s-1) + 1) > tol
-                            times((s-1)*3+1).FaceColor = [0 0 1];
-                            % text(times((s-1)*3+1).YEndPoints - times((s-1)*3+1).YData/2, times((s-1)*3+1).XEndPoints, 'T^d', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                        if slot_phase_duration(4*(s-1) + 1) > tol
+                            times((s-1)*4 + 1).FaceColor = [0 0 1];
+                            % text(times((s-1)*4+1).YEndPoints - times((s-1)*4+1).YData/2, times((s-1)*4+1).XEndPoints, 'T^d', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
                         end
-                        if slot_phase_duration(3*(s-1) + 2) > tol
-                            times((s-1)*3+2).FaceColor = [1 1 0];
-                            % text(times((s-1)*3+2).YEndPoints - times((s-1)*3+2).YData/2, times((s-1)*3+2).XEndPoints, 'T^w', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                        if slot_phase_duration(4*(s-1) + 2) > tol
+                            times((s-1)*4 + 2).FaceColor = [1 0 1];
+                            % text(times((s-1)*4+2).YEndPoints - times((s-1)*4+2).YData/2, times((s-1)*4+2).XEndPoints, 'exT^w', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
                         end
-                        if slot_phase_duration(3*(s-1) + 3) > tol
-                            times((s-1)*3+3).FaceColor = [0 1 0];
-                            % text(times((s-1)*3+3).YEndPoints - times((s-1)*3+3).YData/2, times((s-1)*3+3).XEndPoints, 'T^e', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                        if slot_phase_duration(4*(s-1) + 3) > tol
+                            times((s-1)*4 + 3).FaceColor = [1 1 0];
+                            % text(times((s-1)*4+3).YEndPoints - times((s-1)*4+3).YData/2, times((s-1)*4+3).XEndPoints, 'T^w', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                        end
+                        if slot_phase_duration(4*(s-1) + 4) > tol
+                            times((s-1)*4 + 4).FaceColor = [0 1 0];
+                            % text(times((s-1)*4+4).YEndPoints - times((s-1)*4+4).YData/2, times((s-1)*4+4).XEndPoints, 'T^e', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
                         end
                     end
                 end

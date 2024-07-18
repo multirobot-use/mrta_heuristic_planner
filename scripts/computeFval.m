@@ -12,6 +12,7 @@ function [fval] = computeFval(Agent, Task, objective_function)
     %   - 2. Minimize the total joint flight time: min(sum(tfin(a,S))).
     %   - 3. Same as 1. but without used slots term.
     %   - 4. Combination of 1 and 2. Use parameters alpha and betta to give more importance to one over another.
+    %   - 5. Makespan, total joint flight time, total joint consumed battery time, coalition size deviation, deadline delays.
     if nargin < 3 || isempty(objective_function)
         objective_function = 1;
     end
@@ -74,24 +75,37 @@ function [fval] = computeFval(Agent, Task, objective_function)
             tfin_a_s(a, s + 1) = Agent(a).tfin_s(s + 1);
         end
     end
+
+    % Extract consumed battery time (Bc_a_s) from Agent.queue, Agent.Td_s, Agent.Tw_s and Agent.Te_S
+    Bc_a_s = zeros(A, S);
+    for a = 1:A
+        for s = 1:length(Agent(a).queue) - 1
+            t = Agent(a).queue(s + 1);
+            if t == R
+                Bc_a_s(a, s) = Agent(a).Td_s(s);
+            else
+                Bc_a_s(a, s) = Agent(a).Td_s(s) + Agent(a).Tw_s(s) + Task(t).Te;
+            end
+        end
+    end
     
     % Objective function coefficients
     % Compute makespan
-    f_term_1 = max(max(tfin_a_s));
+    makespan = max(max(tfin_a_s));
 
     % Compute the total joint flight time
-    f_term_2 = sum(tfin_a_s(:, S + 1));
+    total_Ft = sum(tfin_a_s(:, S + 1));
 
     % Compute the total waiting time
-    f_term_3 = 0;
+    total_Tw = 0;
     for a = 1:A
-        f_term_3 = f_term_3 + sum(Agent(a).Tw_s);
+        total_Tw = total_Tw + sum(Agent(a).Tw_s);
     end
 
     % Compute the number of used slots
-    f_term_4 = 0;
+    s_used = 0;
     for a = 1:A
-        f_term_4 = f_term_4 + length(Agent(a).queue) - 1;
+        s_used = s_used + length(Agent(a).queue) - 1;
     end
 
     % Compute the coalition size deviation
@@ -99,10 +113,10 @@ function [fval] = computeFval(Agent, Task, objective_function)
     task_na = [Task.na];
     task_na(task_N == 0) = [];
     task_N(task_N == 0)  = [];
-    f_term_5 = sum(task_N - task_na);
+    CSD = sum(task_N - task_na);
 
-    % Compute the deviation from the tmax of a task
-    f_term_6 = 0;
+    % Compute the deviation from the tmax of a task (Deadline Deviation (DD))
+    DD = 0;
     for a = 1:A
         s = 0;
         for task = 1:length(Agent(a).queue) - 1
@@ -110,38 +124,48 @@ function [fval] = computeFval(Agent, Task, objective_function)
             s = s + 1;
             d_tmax_tfin = tfin_a_s(a, s + 1) - Task(t).tmax;
             if d_tmax_tfin > 0
-                f_term_6 = f_term_6 + d_tmax_tfin;
+                DD = DD + d_tmax_tfin;
             end
         end
     end
 
+    % Compute the total joint consumed battery time
+    CBT = sum(sum(Bc_a_s));
+
     switch objective_function
     case 2
         % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
-        % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
+        % CSD: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
         % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
         % Note: no need to minimize Tw as its included in the total joint flight time.
-        fval = f_term_2/tmax_m + f_term_5/V_max + f_term_6/d_tmax_max;
+        fval = total_Ft/tmax_m + CSD/V_max + DD/d_tmax_max;
     case 3
         % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
         % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
-        % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
+        % CSD: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
         % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
-        fval = f_term_1/z_max + f_term_3/Tw_max + f_term_5/V_max + f_term_6/d_tmax_max;
+        fval = makespan/z_max + total_Tw/Tw_max + CSD/V_max + DD/d_tmax_max;
     case 4
         % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
         % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
         % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
-        % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
+        % CSD: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
         % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
         % Note: here Tw penalises twice, first in the total joint flight time term, then in the Tw term
-        fval = f_term_1*alpha/z_max + f_term_2*betta/tmax_m + f_term_3/Tw_max + f_term_5/V_max + f_term_6/d_tmax_max;
+        fval = makespan*alpha/z_max + total_Ft*betta/tmax_m + total_Tw/Tw_max + CSD/V_max + DD/d_tmax_max;
+    case 5
+        % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+        % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+        % Minimize the total joint consumed battery time
+        % CSD: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
+        % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
+        fval = makespan/z_max + total_Ft/tmax_m + CSD/V_max + DD/d_tmax_max + CBT/(A*Tw_max);
     otherwise
         % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
         % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
         % s_used: Coefficients of the term minimizing the number of used slots.
-        % V: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
+        % CSD: Coefficients of the term penalizing the use of a different number of Agents. V(2 to T) to exclude Recharge task.
         % d_tmax_tfin_a_s: Coefficients of the term penalizing exceeding the tmax of a task.
-        fval = f_term_1/z_max + f_term_3/Tw_max + f_term_4/s_used_max + f_term_5/V_max + f_term_6/d_tmax_max;
+        fval = makespan/z_max + total_Tw/Tw_max + s_used/s_used_max + CSD/V_max + DD/d_tmax_max;
     end
 end

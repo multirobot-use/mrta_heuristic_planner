@@ -10,6 +10,7 @@ function [dv, fval, result] = buildSolutionArray(handmade_solution, Agent, Task,
     %   - 2. Minimize the total joint flight time: min(sum(tfin(a,S))).
     %   - 3. Same as 1. but without used slots term.
     %   - 4. Combination of 1 and 2. Use parameters alpha and betta to give more importance to one over another.
+    %   - 5. TODO: Makespan, total joint flight time, total joint consumed battery time, coalition size deviation, deadline delays.
     if nargin < 4 || isempty(objective_function)
         objective_function = 1;
     end
@@ -541,6 +542,15 @@ function [dv, fval, result] = buildSolutionArray(handmade_solution, Agent, Task,
         % Tw: Coefficients of the term minimizing the waiting time to avoid unnecessary waitings.
         % Note: here Tw penalises twice, first in the total joint flight time term, then in the Tw term
         f((start_Tw_a_s - 1) + 1 : (start_Tw_a_s - 1) + length_Tw_a_s) = 1/Tw_max;
+    case 5
+        % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
+        f((start_z - 1) + 1) = 1/z_max;
+
+        % Minimize the total joint flight time: min(sum(tfin(a,S))), for all a = 1 to A.
+        f((start_tfin_a_s - 1) + (1 + ((S + 1) - 1)*A):(start_tfin_a_s - 1) + (A + ((S + 1) - 1)*A)) = 1/tmax_m;
+
+        % Minimize the total joint consumed battery time
+        % f() = 1/Tw_max;
     otherwise
         % Minimize the longest queue's execution time: min(max(tfin(a,S))) -> min(z).
         f((start_z - 1) + 1) = 1/z_max;

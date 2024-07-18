@@ -1,31 +1,30 @@
-# Optimal Task Allocation for Heterogeneous Multi-robot Teams with Battery Constraints
-## Overview
-This repository deals with optimal task planning missions with heterogeneous teams of robots that will have to execute a number of tasks that may have different specifications and types, while dealing with limited resources that can be recovered by executing certain actions, i.e. the robots have limited battery power, but have the possibility to plan recharges.
+This problem has been formulated as a Mixed-Integer Linear Program (MILP) so it can be solved optimally using any of the shelf solver, e.g. Gurobi. Furthermore, an heuristic algorithm to compute approximate solutions efficiently can also be found in this repository. The heuristic algorithm can be incorporated into a mission planning and execution system that can adapt to unforeseen events in changing environments by adjusting or recalculating plans in real-time, e.g. [Mission execution framework](https://github.com/grvcTeam/aerialcore_planning/tree/master/human_aware_collaboration_planner). Last, there is also a tool containing an algorithm that can be used to try to fix delayed scenarios in order to avoid having to replan completely.
 
-The objective is to find a mission plan, i.e. to assign all tasks to the robots (also called agents) needed to complete them successfully respecting the constraints imposed by each task, while minimizing the total execution time, i.e. the makespan.
-
-The problem is formulated using Mixed Integer Linear Programming (MILP) in Matlab. To solve it, the `intlinprog()` Matlab function is called. If you have Gurobi installed in Matlab, this function should be overwritten by the `intlinprog()` Gurobi function, so the same code works using Matlab or Gurobi solvers.
-
-## Problem description
-The proposed problem constitutes a first step towards the formulation and analysis of a problem of complexity never before addressed in the state of the art.
-
-The problem can be classified as ST-MR-TA according to the taxonomy described in [[1]](#1), i.e., robots can execute only one task at a time (ST), tasks may need more than one robot to execute (MR), and robots are assigned tasks to be executed according to a schedule. Can also be classified as Task Windows (TW) according to [[2]](#2). There's also another category in that taxonomy, Synchronization and Precedence (SP). We do not have precedence constraints, but we do have synchronization constraints when multiple robots has to execute a task together or do a relay due to battery constraints. Last, this problem can be classified also as CD according to [[3]](#3), i.e. the tasks has complex inter-task dependencies.
-
-Robots are mainly characterized by their type. Tasks have a list of robot types that have hardware compatible with it. In this way, the formulation can restrict the assignment of tasks to task-compatible robots only, being totally agnostic to the actual hardware that constitutes each type of robot.
-
-To understand the wide variety of tasks that are contemplated within the problem, we talk about two characteristics of the tasks: composability and number of robots. Depending on the composability, tasks can be non-decomposable, relayable or fragmentable. Non-composable tasks must be executed continuously by the same robots, relayable tasks must be executed continuously, but allow relays between several robots, and finally, fragmentable tasks can be executed in fragments that do not have to be coordinated between them and can be spread over the schedule of one or several robots. On the other hand, tasks can have a fixed number of robots, i.e. they need to be executed by exactly the specified number of robots, they can have a variable number of robots, meaning that they specify an ideal number of robots with which to be executed, but allow a different number of robots to be used, or they can specify no number of robots at all, and their duration will depend on the number of robots finally employed to execute them. Tasks can belong to any type that is a combination of these two characteristics.
-
-In the [scenario](scripts/scenario.m) script you can see in more detail how agents (robots) and tasks are implemented within the formulation.
+For a complete description of the work see [[1]](#1).
 
 ## Installation
-There are no special requirements to be able to run the formulation Matlab script.
+There are no special requirements to be able to run the Matlab scripts.
 Just make sure you have correctly added this project's path to the matlab path, including subfolders:
 ```
 addpath(genpath('<install_dir>/task_planner'))
 ```
 You may also want to install [Gurobi](https://www.gurobi.com/) for Matlab to use it as MILP solver.
 
-## Execution
+## Code description
+The three main source codes are:
+
+- [optimalTaskAllocator](src/optimalTaskAllocator.m): this script contains the complete MILP formulation. It receives a scenario coded into two data structures, i.e., robots and tasks, and returns the MILP solution array and its objective function value.
+- [heuristicTaskAllocator](src/heuristicTaskAllocator.m): this script contains several heuristic algorithms that can solve the MRTA problem including the main heuristic version (number 9), a greedy version (number 12), a random version (number 6) and a pseudo-random version (number 4). It receives the scenario to solve coded into two data structures, and returns the solution coded inside the same data structures. It also returns information needed to repair the plan in case any delay occurs.
+- [planRepair](src/planRepair.m): this code fix a delayed scenario if possible. It receives a plan solution contained in Robots and Tasks data structures, the synchronization and relays information, and the details about the amount and the location of the delay, and returns the plan, fixed or not, using the same data structures as in the input, and whether the plan was fixed or not.
+
+Other useful scripts are:
+
+- [printSolution](scripts/printSolution.m): this script can be used to print the solution to a scenario either solved with *optimalTaskAllocator*, *heuristicTaskAllocator* or *planRepair*. It uses a color code to represent displacement, waiting and execution times (blue, yellow and green respectively).
+- [generateScenarios](scripts/generateScenarios.m):
+- [previewScenario](scripts/previewScenario.m):
+- [scenario](scripts/scenario.m):
+
+## Execution examples
 The main script, which implements and solves the MILP formulation, is [optimalTaskAllocator](src/optimalTaskAllocator.m).
 Inside this file there is a function defined as:
 ```
@@ -100,12 +99,16 @@ printSolution(sol, Agent, Task, 0, 'scenario_id', 'execution_id', fval);
 ```
 
 ## Heuristic planner
-The heuristic planner creates, if feasible, a solution to the specified scenario. This algorithm is contained in [initializer](src/initializer.m) and its defined as:
+The heuristic planner creates, if feasible, a solution to the specified scenario. This algorithm is contained in [heuristicTaskAllocator](src/heuristicTaskAllocator.m) and its defined as:
 ```
-function [Agent, Task, allocation_order, S_R] = initializer(arg_1, arg_2, reward_coefficients, version, seed)
+function [Agent, Task, allocation_order, S_R] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
 ```
-This heuristic method can be used to initialize the MILP solver by setting the corresponding config flag at launching time. To separately call `initializer()`, `arg_1` and `arg_2` should either be Agent and Task or a valid scenario id and optionally execution id. The second parameter, `reward_coefficients`, controls the task allocation order. `version` is used to select the method to get the task allocation order. Last, `seed` is used as allocation order in the "seed" version (input order).
-The solution to the specified scenario is added to `Agent` and `Tasks` structures. `allocation_order` output variable can be used as seed to regenerate the solution using the initializer with the "seed" version, and `S_R` output variable indicates the coordination points, needed if we want to build the complete solution array.
+This heuristic method can be used to initialize the MILP solver by setting the corresponding config flag at launching time. To separately call `heuristicTaskAllocator()`, `arg_1` and `arg_2` should either be Agent and Task or a valid scenario id and optionally execution id. The second parameter, `reward_coefficients`, controls the task allocation order. `version` is used to select the method to get the task allocation order. Last, `seed` is used as allocation order in the "seed" version (input order).
+The solution to the specified scenario is added to `Agent` and `Tasks` structures. `allocation_order` output variable can be used as seed to regenerate the solution using the heuristicTaskAllocator with the "seed" version, and `S_R` output variable indicates the coordination points, needed if we want to build the complete solution array.
+
+The next gif shows an example of the heuristic process of building a solution for a scenario with 10 heterogeneos robots and 50 tasks.
+
+![10a50t1](https://github.com/alvcalmat/XATS/assets/74324102/79c46fe3-3675-4173-a47e-d84a3c705b80)
 
 ## Build solution
 This is a tool to build the decision variable array from a handmade or heuristic solution. Its defined as follows:
@@ -197,16 +200,21 @@ printSolution(sol, Agent, Task);
 
 ## References
 <a id="1">[1]</a>
+Álvaro Calvo and Jesús Capitán,
+"Heterogeneous Multi-robot Task Allocation for Long-endurance Missions in Dynamic Scenarios",
+, vol. , no. , pp. –, .
+
+<a id="2">[2]</a>
 Gerkey, Brian P and Mataric, Maja J,
 "A formal analysis and taxonomy of task allocation in multi-robot systems",
 The International Journal of Robotics Research, vol. 23, no. 9, pp. 939–954, 2004.
 
-<a id="2">[2]</a>
+<a id="3">[3]</a>
 E. Nunes, M. Manner, H. Mitiche, and M. Gini,
 “A taxonomy for task allocation problems with temporal and ordering constraints”,
 Robotics and Autonomous Systems, vol. 90, pp. 55–70, 2017.
 
-<a id="3">[3]</a>
+<a id="4">[4]</a>
 G. A. Korsah, A. Stentz, and M. B. Dias,
 “A comprehensive taxonomy for multi-robot task allocation”,
 The International Journal of Robotics Research, vol. 32, no. 12, pp. 1495–1512, 2013.
