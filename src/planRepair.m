@@ -1,5 +1,3 @@
-%% Function to build the decision variable array from a handmade or heuristic solution
-%! ----------------------------------------------------------
 function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
     % Inputs:
         % Agent:  Robot structure array

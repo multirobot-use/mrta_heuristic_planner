@@ -100,6 +100,11 @@ function [fval] = computeFval(Agent, Task, objective_function)
     total_Tw = 0;
     for a = 1:A
         total_Tw = total_Tw + sum(Agent(a).Tw_s);
+        
+        % Check if this plan has been repaired
+        if isfield(Agent, 'exTw_s')
+            total_Tw = total_Tw + sum(Agent(a).exTw_s);
+        end
     end
 
     % Compute the number of used slots
