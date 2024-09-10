@@ -309,9 +309,21 @@ function [Agent, Task] = scenario(A, T, types, discretized)
     % Load predefined scenario
     elseif predefined
         if not(isnumeric(A))
-            old_executed_random_scenario_id = A;
-            load(['../mat/Agent_', old_executed_random_scenario_id, '.mat']);
-            load(['../mat/Task_', old_executed_random_scenario_id, '.mat']);
+            if not(isequal(A, 'ros_simulation'))
+                old_executed_random_scenario_id = A;
+                load(['../mat/Agent_', old_executed_random_scenario_id, '.mat']);
+                load(['../mat/Task_', old_executed_random_scenario_id, '.mat']);
+            else
+                % Scenario to use in the ROS demo
+                Agent(1) = struct('name', 'uav1', 'type', 1, 'Ft', 30*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y',  0, 'z', 0));
+                Agent(2) = struct('name', 'uav2', 'type', 2, 'Ft', 30*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y',  2, 'z', 0));
+                Agent(3) = struct('name', 'uav3', 'type', 3, 'Ft', 30*60, 'Ft_0', 0*60, 'Ft_saf', 0, 'ts', 5, 'P0', struct('x', 0, 'y', -2, 'z', 0));
+
+                Task(1) = struct('name', 't_R',               'Hr', [1, 2, 3], 'Te', 2*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
+                Task(2) = struct('name', 'Inspection',        'Hr', [1], 'Te',  5*60, 'tmax', 60*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
+                Task(3) = struct('name', 'PVArrayInspection', 'Hr', [2], 'Te', 15*60, 'tmax', 60*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(4) = struct('name', 'Monitoring',        'Hr', [3], 'Te', 25*60, 'tmax', 60*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -6,  'y',  10, 'z', 2), 'color', [0.93 0.69 0.13]);
+            end
         else
             if length(A) > 1
                 error('Invalid input');
