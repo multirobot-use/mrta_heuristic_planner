@@ -67,7 +67,6 @@ If the scenario is feasible, we would see the optimal solution displayed in a ba
 
 ![random3x2](https://github.com/user-attachments/assets/d3c812c1-3c76-4f04-8fd4-a0d46746e3e6)
 
-
 Note that the bar for each task is divided into two parts. The upper part represents the total duration of the task. We can see that the task name/id appears above it. The lower part represents which part of task duration corresponds to the traveling time, waiting time and execution time, represented in blue, yellow and green respectively.
 
 To solve a pre-generated scenario (for example scenario `3r2t1`), and moreover to do so with a different objective function and with a variant of the formulation, we can run it like:
