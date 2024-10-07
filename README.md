@@ -1,15 +1,16 @@
 
-This problem has been formulated as a Mixed-Integer Linear Program (MILP) so it can be solved optimally using any of the shelf solver, e.g. Gurobi. Furthermore, an heuristic algorithm to compute approximate solutions efficiently can also be found in this repository. The heuristic algorithm can be incorporated into a mission planning and execution system that can adapt to unforeseen events in changing environments by adjusting or recalculating plans in real-time, e.g. [Mission execution framework](https://github.com/grvcTeam/aerialcore_planning/tree/master/human_aware_collaboration_planner). Last, there is also a tool containing an algorithm that can be used to try to fix delayed scenarios in order to avoid having to replan completely.
+This problem has been formulated as a Mixed-Integer Linear Program (MILP) so it can be solved optimally using any of the shelf solver, e.g. Gurobi. Furthermore, an heuristic algorithm to compute approximate solutions efficiently can also be found in this repository. The heuristic algorithm can be incorporated into a mission planning and execution system that can adapt to unforeseen events in changing environments by adjusting or recalculating plans in real-time, e.g. [Mission execution framework](https://github.com/multirobot-use/task_planner). Last, there is also a tool containing an algorithm that can be used to try to fix delayed scenarios in order to avoid having to replan completely.
 
-For a complete description of the work see [[1]](#1).
+For a complete description of the work see [[1]](#1) and [[2]](#2).
 
 ## Installation
 
 There are no special requirements to be able to run the Matlab scripts.
 Just make sure you have correctly added this project's path to the matlab path, including subfolders:
 
-```
+```matlab
 addpath(genpath('<install_dir>/task_planner'))
+savepath
 ```
 
 You may also want to install [Gurobi](https://www.gurobi.com/) for Matlab to use it as MILP solver.
@@ -35,7 +36,7 @@ Other useful scripts are:
 
 *optimalTaskAllocator* contains a function defined as:
 
-```
+```matlab
 function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, objective_function, formulation_variants_flags, config_flags, solver_config)
 ```
 
@@ -53,13 +54,13 @@ Last, `config_flags` parameter is a 1x9 logic vector corresponding to the follow
 
 In this way, we can run the planner to solve a randomly generated scenario with `3` robots, `2` tasks and `1` different type of robot like:
 
-```
+```matlab
 [sol, fval] = optimalTaskAllocator(0, 'random', [3 2 1]);
 ```
 
 By default, the print solution flag is set to false. To change that we need to specify it in the last parameter:
 
-```
+```matlab
 [sol, fval] = optimalTaskAllocator(0, 'random', [3 2 1], [], [], [1 1 0 0 0 0 0]);
 ```
 
@@ -71,7 +72,7 @@ Note that the bar for each task is divided into two parts. The upper part repres
 
 To solve a pre-generated scenario (for example scenario `3r2t1`), and moreover to do so with a different objective function and with a variant of the formulation, we can run it like:
 
-```
+```matlab
 [sol, fval] = optimalTaskAllocator('3r2t1', 'Test', [], 4, [1 0 0 0], []);
 ```
 
@@ -79,7 +80,7 @@ Here we are running the mission planner with the fourth predefined objective fun
 
 Last, we can use the `genetic_algorithm_solver` configuration parameter to solve the MILP problem using [Matlab's GA solver](https://es.mathworks.com/help/gads/ga.html) from the Optimization Toolbox.
 
-```
+```matlab
 config_flags = [1, 0, 1, 1, 1, 0, 0, 0, 0];
 [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, [], objective_function, [], config_flags, 0);
 ```
@@ -96,7 +97,7 @@ After running the `optimalTaskAllocator()` function, we can check the values of 
 
 **Note**: if it was a randomly generated scenario, remember to set the save flag on before when calling the main function.
 
-```
+```matlab
 [Agent, Task] = scenario(scenario_id);
 ```
 
@@ -106,7 +107,7 @@ Now the `Agent` and `Task` structures with the scenario information are loaded.
 
 With this information and the solution vector returned by the `optimalTaskAllocator()`, we can call `getVarValue()` to check the value of any decision variable that we want. To check for example how many fragments are tasks being divided into:
 
-```
+```matlab
 nf_t = getVarValue(sol, Agent, Task, 'nf_t')
 ```
 
@@ -116,7 +117,7 @@ The names of the variables can be consulted in the [getVarValue](scripts/getVarV
 
 In case that we forgot to print the solution, we can also print it manually after loading the planner workspace information by doing:
 
-```
+```matlab
 printSolution(sol, Agent, Task, 0, 'scenario_id', 'execution_id', fval);
 ```
 
@@ -126,7 +127,7 @@ The heuristic planner creates, if feasible, a solution to the specified scenario
 
 To use the heuristic solution as initial solution for the MILP formulation this function shall be defined as:
 
-```
+```matlab
 function [Agent, Task, allocation_order, S_R] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
 ```
 
@@ -134,17 +135,17 @@ function [Agent, Task, allocation_order, S_R] = heuristicTaskAllocator(arg_1, ar
 
 If you think you may need to call the plan repair function (e.g. in a real live execution), we need extra information from this function, so it shall be defined as:
 
-```
+```matlab
 function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
 ```
 
 Last, the simplest and fastest heuristic planner execution is achieved by defining it as:
 
-```
+```matlab
 function [Agent, Task, allocation_order] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
 ```
 
-To execute `heuristicTaskAllocator()`, `arg_1` and `arg_2` should either be Agent and  structures or a valid scenario id and optionally execution id. The second parameter, `reward_coefficients`, controls the task allocation order depending on the solver version. `version` is used to select the method to get the task allocation order. The 9th version is the main heuristic algorithm, 12th is a greedy version, 6th a random solver version, and 4th a pseudo-random version. This four main heuristic versions are explain deeper in [[1]](#1). Last, `seed` is used as task allocation order in the "seed" version (input order).
+To execute `heuristicTaskAllocator()`, `arg_1` and `arg_2` should either be Agent and  structures or a valid scenario id and optionally execution id. The second parameter, `reward_coefficients`, controls the task allocation order depending on the solver version. `version` is used to select the method to get the task allocation order. The 9th version is the main heuristic algorithm, 12th is a greedy version, 6th a random solver version, and 4th a pseudo-random version. This four main heuristic versions are explain deeper in [[2]](#2). Last, `seed` is used as task allocation order in the "seed" version (input order).
 The solution to the specified scenario is added to `Agent` and `Tasks` structures.
 
 The next gif shows an example of the heuristic process of building a solution for a scenario with 10 heterogeneous robots and 50 tasks.
@@ -155,7 +156,7 @@ The next gif shows an example of the heuristic process of building a solution fo
 
 When a plan is no longer valid because of a delay, we can use the plan repair function to try to fix the plan in order to avoid repeating the whole planning process. This function is defined as:
 
-```
+```matlab
 function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
 ```
 
@@ -164,21 +165,24 @@ As input we have: the robot structure array `Agent`, the task structure array `T
 ## References
 
 <a id="1">[1]</a>
+Calvo, Á., & Capitán, J. (2024, May). Optimal Task Allocation for Heterogeneous Multi-robot Teams with Battery Constraints. In 2024 IEEE International Conference on Robotics and Automation (ICRA) (pp. 7243-7249). IEEE.
+
+<a id="2">[2]</a>
 Álvaro Calvo and Jesús Capitán,
 "Heterogeneous Multi-robot Task Allocation for Long-endurance Missions in Dynamic Scenarios",
 , vol. , no. , pp. –, .
 
-<a id="2">[2]</a>
+<a id="3">[3]</a>
 Gerkey, Brian P and Mataric, Maja J,
 "A formal analysis and taxonomy of task allocation in multi-robot systems",
 The International Journal of Robotics Research, vol. 23, no. 9, pp. 939–954, 2004.
 
-<a id="3">[3]</a>
+<a id="4">[4]</a>
 E. Nunes, M. Manner, H. Mitiche, and M. Gini,
 “A taxonomy for task allocation problems with temporal and ordering constraints”,
 Robotics and Autonomous Systems, vol. 90, pp. 55–70, 2017.
 
-<a id="4">[4]</a>
+<a id="5">[5]</a>
 G. A. Korsah, A. Stentz, and M. B. Dias,
 “A comprehensive taxonomy for multi-robot task allocation”,
 The International Journal of Robotics Research, vol. 32, no. 12, pp. 1495–1512, 2013.
