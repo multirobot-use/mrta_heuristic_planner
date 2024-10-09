@@ -321,8 +321,8 @@ function [Agent, Task] = scenario(A, T, types, discretized)
 
                 Task(1) = struct('name', 't_R',               'Hr', [1, 2, 3], 'Te', 2*60,  'tmax', 0,     'N', 0, 'N_hardness', 0, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x',  0,  'y',  0,  'z', 1), 'color', [0.85 0.33 0.10] );
                 Task(2) = struct('name', 'Inspection',        'Hr', [1], 'Te',  5*60, 'tmax', 60*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -7,  'y',  8,  'z', 2), 'color', [0.00 0.45 0.74]);
-                Task(3) = struct('name', 'PVArrayInspection', 'Hr', [2], 'Te', 15*60, 'tmax', 60*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
-                Task(4) = struct('name', 'Monitoring',        'Hr', [3], 'Te', 25*60, 'tmax', 60*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -6,  'y',  10, 'z', 2), 'color', [0.93 0.69 0.13]);
+                Task(3) = struct('name', 'Monitoring',        'Hr', [2], 'Te', 15*60, 'tmax', 60*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -8,  'y',  9,  'z', 2), 'color', [0.47 0.67 0.19]);
+                Task(4) = struct('name', 'PVArrayInspection', 'Hr', [3], 'Te', 25*60, 'tmax', 60*60, 'N', 1, 'N_hardness', 1, 'Relayability', 0, 'Fragmentability', 0, 'Fl', 0, 'wp', struct('x', -6,  'y',  10, 'z', 2), 'color', [0.93 0.69 0.13]);
             end
         else
             if length(A) > 1
