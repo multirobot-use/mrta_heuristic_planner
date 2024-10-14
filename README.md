@@ -1,8 +1,20 @@
 ## Multi-Robot Task Allocation (MRTA) for heterogeneous teams
 
-This problem has been formulated as a Mixed-Integer Linear Program (MILP) so it can be solved optimally using any of the shelf solver, e.g. Gurobi. Furthermore, an heuristic algorithm to compute approximate solutions efficiently can also be found in this repository. The heuristic algorithm can be incorporated into a mission planning and execution system that can adapt to unforeseen events in changing environments by adjusting or recalculating plans in real-time, e.g. [Mission execution framework](https://github.com/multirobot-use/task_planner). Last, there is also a tool containing an algorithm that can be used to try to fix delayed scenarios in order to avoid having to replan completely.
+This repository addresses a MRTA problem for heterogeneous teams. All code is written in Matlab and it includes: 1) a MILP (Mixed-Integer Linear Program) formulation of the problem, so it can be solved optimally using of-the-shelf solvers such as Gurobi; 2) a heuristic planer to compute efficiently approximate solutions; and 3) an algorithm to repair plans during mission execution in dynamic scenarios where robots may get delayed due to unexpected events. 
 
-For a complete description of the work see [[1]](#1) and [[2]](#2).
+For a complete description of the problem and the algorithms, you can read our related publications: 
+
+```bibtex
+@inproceedings{calvo_icra24,
+  address = {Yokohama, Japan},
+  author = {Calvo, Alvaro and Capitan, Jesus},
+  booktitle = {International Conference on Robotics and Automation (ICRA)},
+  title = {{Optimal Task Allocation for Heterogeneous Multi-robot Teams with Battery Constraints}},
+  pages = {7243-7249},
+  year = {2024},
+  doi={10.1109/ICRA57147.2024.10611147}
+}
+```
 
 ## Installation
 
@@ -164,14 +176,6 @@ function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
 As input we have: the robot structure array `Agent`, the task structure array `Task`, a list of the slots to be synchronized `synch`, a list of relays to be coordinated `relays`, and an array containing the amount of delay in seconds and the slot delayed `[d r s]`. As output we have the fixed plan inside of the same `Agent` and `Task` structures, and a flag indicating wether the plan was fixable or not.
 
 ## References
-
-<a id="1">[1]</a>
-Calvo, Á., & Capitán, J. (2024, May). Optimal Task Allocation for Heterogeneous Multi-robot Teams with Battery Constraints. In 2024 IEEE International Conference on Robotics and Automation (ICRA) (pp. 7243-7249). IEEE.
-
-<a id="2">[2]</a>
-Álvaro Calvo and Jesús Capitán,
-"Heterogeneous Multi-robot Task Allocation for Long-endurance Missions in Dynamic Scenarios",
-, vol. , no. , pp. –, .
 
 <a id="3">[3]</a>
 Gerkey, Brian P and Mataric, Maja J,
