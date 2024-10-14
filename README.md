@@ -1,3 +1,4 @@
+## Multi-Robot Task Allocation (MRTA) for heterogeneous teams
 
 This problem has been formulated as a Mixed-Integer Linear Program (MILP) so it can be solved optimally using any of the shelf solver, e.g. Gurobi. Furthermore, an heuristic algorithm to compute approximate solutions efficiently can also be found in this repository. The heuristic algorithm can be incorporated into a mission planning and execution system that can adapt to unforeseen events in changing environments by adjusting or recalculating plans in real-time, e.g. [Mission execution framework](https://github.com/multirobot-use/task_planner). Last, there is also a tool containing an algorithm that can be used to try to fix delayed scenarios in order to avoid having to replan completely.
 
