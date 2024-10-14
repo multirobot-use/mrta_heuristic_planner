@@ -175,19 +175,3 @@ function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
 
 As input, we have: the robot structure array `Agent`, the task structure array `Task`, a list of the slots to be synchronized `synch`, a list of relays to be coordinated `relays`, and an array containing the amount of delay in seconds and the slot delayed `[d r s]`. As output, we have the fixed plan inside of the same `Agent` and `Task` structures, and a flag indicating whether the plan was successfully repaired or not.
 
-## References
-
-<a id="3">[3]</a>
-Gerkey, Brian P and Mataric, Maja J,
-"A formal analysis and taxonomy of task allocation in multi-robot systems",
-The International Journal of Robotics Research, vol. 23, no. 9, pp. 939–954, 2004.
-
-<a id="4">[4]</a>
-E. Nunes, M. Manner, H. Mitiche, and M. Gini,
-“A taxonomy for task allocation problems with temporal and ordering constraints”,
-Robotics and Autonomous Systems, vol. 90, pp. 55–70, 2017.
-
-<a id="5">[5]</a>
-G. A. Korsah, A. Stentz, and M. B. Dias,
-“A comprehensive taxonomy for multi-robot task allocation”,
-The International Journal of Robotics Research, vol. 32, no. 12, pp. 1495–1512, 2013.
