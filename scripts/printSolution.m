@@ -8,11 +8,20 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
     % Set the numerical precision
     tol = 1e-6;
 
+    % Threshold to simplify the plot
+    AS_threshold = 20;
+
     % Get scenario information
     [Agent, Task, A, T, S, N, R, Td_a_t_t, Te_t_nf, H_a_t] = getConstantScenarioValues(Agent, Task);
 
     % Get start length structure information
     [dv_start_length, length_dv] = getStartLengthInformation(Agent, Task);
+
+    % Initialize executed_flag (from repaired or replanned plans)
+    executed_flag = zeros(A,S);
+
+    % Initialize the delay of each slot
+    delay = zeros(A,S);
     
     % Check the printing mode: from a solution vector or from an initializer solution structure
     if length(sol) == length_dv
@@ -53,8 +62,6 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         length_Te_a_s = start_length(2);
         Te = reshape(sol(start_Te_a_s : start_Te_a_s + length_Te_a_s - 1), A, S);
 
-        % Initialize executed waiting times (from repaired plans)
-        exTw = zeros(A,S);
     elseif isfield(Agent, 'queue')
         % Get the number of used slots per robot
         used_slots = zeros(1,A);
@@ -89,7 +96,7 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         % Extract tfin_a_s from Agent.tfin
         tfin_a_s = zeros(A, S+1);
         for a = 1:A
-            for s = 1:S
+            for s = 1:length(Agent(a).queue) - 1
                 tfin_a_s(a, s + 1) = Agent(a).tfin_s(s + 1);
             end
         end
@@ -103,7 +110,7 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         % Extract Td_a_s from Agent.Td_s
         Td = zeros(A,S);
         for a = 1:A
-            for s = 1:S
+            for s = 1:length(Agent(a).queue) - 1
                 Td(a,s) = Agent(a).Td_s(s);
             end
         end
@@ -114,7 +121,7 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         % Extract Tw_a_s from Agent.Tw_s
         Tw = zeros(A,S);
         for a = 1:A
-            for s = 1:S
+            for s = 1:length(Agent(a).queue) - 1
                 Tw(a,s) = Agent(a).Tw_s(s);
             end
         end
@@ -125,7 +132,7 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         % Extract Te_a_s from Agent.Te_s
         Te = zeros(A,S);
         for a = 1:A
-            for s = 1:S
+            for s = 1:length(Agent(a).queue) - 1
                 Te(a,s) = Agent(a).Te_s(s);
             end
         end
@@ -133,21 +140,17 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         % Substitute virtual zeros by exact zeros in Te
         Te(abs(Te) < tol) = 0;
 
-        % Initialize executed waiting times (from repaired plans)
-        exTw = zeros(A,S);
-
-        % Check if this plan has been repaired
-        if isfield(Agent, 'exTw_s')
-            % Extract Tw_a_s from Agent.Tw_s
+        % Check if this plan has been repaired or replanned
+        if isfield(Agent, 'executed_flag_s')
+            % Extract executed_flag from Agent.executed_flag_s
             for a = 1:A
-                for s = 1:S
-                    exTw(a,s) = Agent(a).exTw_s(s);
+                for s = 1:length(Agent(a).queue) - 1
+                    executed_flag(a,s) = Agent(a).executed_flag_s(s);
+                    delay(a,s) = Agent(a).delay_s(s);
                 end
             end
-
-            % Substitute virtual zeros by exact zeros in Tw
-            exTw(abs(exTw) < tol) = 0;
         end
+
     else
         return;
     end
@@ -165,12 +168,12 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
                             Td(a,s)   = Td(a,s)   + Td(a,s + 1);
                             Tw(a,s)   = Tw(a,s)   + Tw(a,s + 1);
                             Te(a,s)   = Te(a,s)   + Te(a,s + 1);
-                            exTw(a,s) = exTw(a,s) + exTw(a,s + 1);
+                            delay(a,s) = delay(a,s) + delay(a,s + 1);
                             % Update displacement, waiting and execution times for the slots that have been moved
                             Td(a,s + 1:S)   = [  Td(a,(s+1) + 1:S), 0];
                             Tw(a,s + 1:S)   = [  Tw(a,(s+1) + 1:S), 0];
                             Te(a,s + 1:S)   = [  Te(a,(s+1) + 1:S), 0];
-                            exTw(a,s + 1:S) = [exTw(a,(s+1) + 1:S), 0];
+                            delay(a,s + 1:S) = [delay(a,(s+1) + 1:S), 0];
                             % Move the empty slot to the end
                             for slot = s+1:S-1
                                 for task = 1:T
@@ -190,9 +193,16 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         end
     end
 
+    % Set the simplify flag
+    simplify = false;
+    if A*S > AS_threshold && isfield(Agent, 'queue')
+        simplify = true;
+    end
+
     % Open a new figure
     figure();
     hold on;
+    set(gcf, 'Visible', 'off');
     barWidth = 0.8;
     times_bar_proportion = 1/3;
 
@@ -214,44 +224,131 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
         slot_phase_duration = zeros(1,4*S);
         for s = 1:S
             slot_phase_duration(4*(s-1) + 1) =   Td(a,s);
-            slot_phase_duration(4*(s-1) + 2) = exTw(a,s);
+            slot_phase_duration(4*(s-1) + 2) = delay(a,s);
             slot_phase_duration(4*(s-1) + 3) =   Tw(a,s);
             slot_phase_duration(4*(s-1) + 4) =   Te(a,s);
         end
 
+        if simplify
+            slot_phase_colors = zeros(4*(length(Agent(a).queue) - 1), 3);
+            slot_colors = zeros(length(Agent(a).queue) - 1, 3);
+            for s = 1:length(Agent(a).queue) - 1
+                if executed_flag(a,s)
+                    % Change executed tasks color to gray
+                    slot_colors(s,:) = [0.9, 0.9, 0.9];
+
+                    slot_phase_colors(4*(s-1) + 1, :) = [0.75, 0.75, 0.75]; % Displacement
+                    slot_phase_colors(4*(s-1) + 2, :) = [1 0 0]; % Delay
+                    slot_phase_colors(4*(s-1) + 3, :) = [0.75, 0.75, 0.75]; % Waiting time
+                    slot_phase_colors(4*(s-1) + 4, :) = [0.75, 0.75, 0.75]; % Execution
+                else
+                    slot_colors(s,:) = Task(Agent(a).queue(s + 1)).color;
+
+                    slot_phase_colors(4*(s-1) + 1, :) = [0 0 1]; % Displacement
+                    slot_phase_colors(4*(s-1) + 2, :) = [1 0 0]; % Delay
+                    slot_phase_colors(4*(s-1) + 3, :) = [1 1 0]; % Waiting time
+                    slot_phase_colors(4*(s-1) + 4, :) = [0 1 0]; % Execution
+                end
+            end
+        end
+
         % Plot a's queue
         if not(isempty(slot_duration))
-            gantt = barh(a + barWidth * (1/2 - (1 - times_bar_proportion)/2), slot_duration, barWidth * (1 - times_bar_proportion), 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0.75);
-            times = barh(a + barWidth * (times_bar_proportion/2 - 1/2), slot_phase_duration, barWidth * times_bar_proportion, 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0.75, 'EdgeAlpha', 0);
-            box   = barh(a, slot_duration, barWidth, 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0);
+            if simplify
+                %? Note: in case we need even lighter plots, delete FaceAlpha and text. That should be enough. We could also delete some of the boxes (times or outer boxes).
+                x_start = 0;
+                for s = 1:length(Agent(a).queue) - 1
+                    % Gantt using patch
+                    x_end = x_start + slot_duration(s);
+                    y_pos = a + barWidth * (1/2 - (1 - times_bar_proportion)/2);
+                    bar_width = barWidth * (1 - times_bar_proportion);
+                    patch([x_start x_end x_end x_start], [y_pos-bar_width/2 y_pos-bar_width/2 y_pos+bar_width/2 y_pos+bar_width/2], slot_colors(s,:), 'LineWidth', 1.5, 'FaceAlpha', 0.75);
+                    text(x_start + slot_duration(s)/2, y_pos, Task(Agent(a).queue(s + 1)).name, 'FontSize', 16, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                    x_start = x_end;
+                end
 
-            % Change tasks colors and add task name
-            for s = 1:S
-                for t = 1:T
-                    if x_a_t_s(a,t + 1,s + 1)
-                        gantt(s).FaceColor = Task(t).color;
-                        text(gantt(s).YEndPoints - gantt(s).YData/2, gantt(s).XEndPoints, Task(t).name, 'FontSize', 16, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        if slot_phase_duration(4*(s-1) + 1) > tol
-                            times((s-1)*4 + 1).FaceColor = [0 0 1];
-                            % text(times((s-1)*4+1).YEndPoints - times((s-1)*4+1).YData/2, times((s-1)*4+1).XEndPoints, 'T^d', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        end
-                        if slot_phase_duration(4*(s-1) + 2) > tol
-                            times((s-1)*4 + 2).FaceColor = [1 0 1];
-                            % text(times((s-1)*4+2).YEndPoints - times((s-1)*4+2).YData/2, times((s-1)*4+2).XEndPoints, 'exT^w', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        end
-                        if slot_phase_duration(4*(s-1) + 3) > tol
-                            times((s-1)*4 + 3).FaceColor = [1 1 0];
-                            % text(times((s-1)*4+3).YEndPoints - times((s-1)*4+3).YData/2, times((s-1)*4+3).XEndPoints, 'T^w', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
-                        end
-                        if slot_phase_duration(4*(s-1) + 4) > tol
-                            times((s-1)*4 + 4).FaceColor = [0 1 0];
-                            % text(times((s-1)*4+4).YEndPoints - times((s-1)*4+4).YData/2, times((s-1)*4+4).XEndPoints, 'T^e', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                x_start = 0;
+                for s = 1:4*(length(Agent(a).queue) - 1)
+                    % Times using patch
+                    x_end = x_start + slot_phase_duration(s);
+                    y_pos = a + barWidth * (times_bar_proportion/2 - 1/2);
+                    bar_width = barWidth * times_bar_proportion;
+                    patch([x_start x_end x_end x_start], [y_pos-bar_width/2 y_pos-bar_width/2 y_pos+bar_width/2 y_pos+bar_width/2], slot_phase_colors(s,:), 'EdgeColor', 'none', 'FaceAlpha', 0.75);
+                    x_start = x_end;
+                end
+
+                x_start = 0;
+                for s = 1:length(Agent(a).queue) - 1
+                    % Outer box using patch
+                    x_end = x_start + slot_duration(s);
+                    y_pos = a;
+                    bar_width = barWidth;
+                    patch([x_start x_end x_end x_start], [y_pos-bar_width/2 y_pos-bar_width/2 y_pos+bar_width/2 y_pos+bar_width/2], [0 0 0], 'FaceColor', 'none', 'LineWidth', 1.5);
+                    x_start = x_end;
+                end
+            else
+                gantt = barh(a + barWidth * (1/2 - (1 - times_bar_proportion)/2), slot_duration, barWidth * (1 - times_bar_proportion), 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0.75);
+                times = barh(a + barWidth * (times_bar_proportion/2 - 1/2), slot_phase_duration, barWidth * times_bar_proportion, 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0.75, 'EdgeAlpha', 0);
+                box   = barh(a, slot_duration, barWidth, 'stacked', 'LineWidth', 1.5, 'FaceAlpha', 0);
+
+                % Change tasks colors and add task name
+                for s = 1:S
+                    for t = 1:T
+                        if x_a_t_s(a,t + 1,s + 1)
+                            gantt(s).FaceColor = Task(t).color;
+                            text(gantt(s).YEndPoints - gantt(s).YData/2, gantt(s).XEndPoints, Task(t).name, 'FontSize', 16, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            if slot_phase_duration(4*(s-1) + 1) > tol
+                                times((s-1)*4 + 1).FaceColor = [0 0 1];
+                                % text(times((s-1)*4+1).YEndPoints - times((s-1)*4+1).YData/2, times((s-1)*4+1).XEndPoints, 'T^d', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            end
+                            if slot_phase_duration(4*(s-1) + 2) > tol
+                                times((s-1)*4 + 2).FaceColor = [1 0 1];
+                                % text(times((s-1)*4+2).YEndPoints - times((s-1)*4+2).YData/2, times((s-1)*4+2).XEndPoints, 'exT^w', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            end
+                            if slot_phase_duration(4*(s-1) + 3) > tol
+                                times((s-1)*4 + 3).FaceColor = [1 1 0];
+                                % text(times((s-1)*4+3).YEndPoints - times((s-1)*4+3).YData/2, times((s-1)*4+3).XEndPoints, 'T^w', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            end
+                            if slot_phase_duration(4*(s-1) + 4) > tol
+                                times((s-1)*4 + 4).FaceColor = [0 1 0];
+                                % text(times((s-1)*4+4).YEndPoints - times((s-1)*4+4).YData/2, times((s-1)*4+4).XEndPoints, 'T^e', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+                            end
                         end
                     end
                 end
             end
         end
     end
+
+    % Check if this plan was delayed
+    %? Note: It seems that sometimes the current execution time is not right. This happens with relays. All not stared slots that relays another already started slot, are considered also in execution. Too get the correct current execution time in this case we need to check and discard the slots that relay other slots also delayed (TODO)
+    if isfield(Agent, 'delay_s')
+        current_execution_time = 0;
+
+        % Get the current execution time
+        for a = 1:A
+            for s = 1:length(Agent(a).queue) - 1
+                % Check if this slot has a delay
+                if delay(a,s) > tol
+                    % Check if this current execution is the greatest so far: tfin from the previous slot plus this slot's delay
+                    current_execution_time = max(current_execution_time, Agent(a).tfin_s((s - 1) + 1) + delay(a,s));
+
+                    % If this slot was executed
+                    if executed_flag(a,s)
+                        % We need to compare the current execution time with this slot's finish time instead
+                        current_execution_time = max(current_execution_time, Agent(a).tfin_s(s + 1));
+                    end
+                end
+            end
+        end
+
+        % Draw a vertical line to represent the current execution time
+        xline(current_execution_time, 'r-', '', 'LineWidth', 2.0, 'DisplayName', 'Current execution time');
+    end
+
+    set(gcf, 'Visible', 'on');
+    drawnow;
+
     % Set axis labels
     xlabel('Time (s)', 'FontSize', 16);
     ylabel('Robot','FontSize', 16);
@@ -264,40 +361,45 @@ function printSolution(sol, Agent, Task, join_flag, scenario_id, execution_id, f
     set(gca,'FontSize', 16, 'FontWeight', 'bold', 'XGrid', 'off', 'YGrid', 'off','xminorgrid','off', 'TickDir', 'out');
 
     % Set title
-    switch nargin
-    case 3
-        title('Mission plan.');
-    case 4
-        title('Mission plan.');
-    case 5
-        if not(isempty(scenario_id))
-            title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.']);
-        else
-            title('Mission plan.');
-        end
-    case 6
-        if isempty(execution_id) && isempty(scenario_id)
-            title('Mission plan.');
-        elseif isempty(execution_id) && not(isempty(scenario_id))
-            title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.']);
-        elseif not(isempty(execution_id)) && isempty(scenario_id)
-            title(['Mission plan (', strrep(execution_id,'_','\_'), ').']);
-        else
-            title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), ' (', strrep(execution_id,'_','\_'), ').']);
-        end
-    case 7
-        if isempty(execution_id) && isempty(scenario_id)
-            title(['Mission plan. fval: ', num2str(fval), '.']);
-        elseif isempty(execution_id) && not(isempty(scenario_id))
-            title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '. fval: ', num2str(fval), '.']);
-        elseif not(isempty(execution_id)) && isempty(scenario_id)
-            title(['Mission plan (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval), '.']);
-        else
-            title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), ' (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval)]);
-        end
+    if nargin < 7
+        title(execution_id);
+    else
+        title([execution_id, ' (f = ', num2str(fval), ')']);
     end
-    
-    if nargin > 5 && not(isempty(execution_id))
-        saveas(gcf, ['../fig/', execution_id], 'fig');
-    end
+    % switch nargin
+    % case 3
+    %     title('Mission plan.');
+    % case 4
+    %     title('Mission plan.');
+    % case 5
+    %     if not(isempty(scenario_id))
+    %         title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.']);
+    %     else
+    %         title('Mission plan.');
+    %     end
+    % case 6
+    %     if isempty(execution_id) && isempty(scenario_id)
+    %         title('Mission plan.');
+    %     elseif isempty(execution_id) && not(isempty(scenario_id))
+    %         title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '.']);
+    %     elseif not(isempty(execution_id)) && isempty(scenario_id)
+    %         title(['Mission plan (', strrep(execution_id,'_','\_'), ').']);
+    %     else
+    %         title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), ' (', strrep(execution_id,'_','\_'), ').']);
+    %     end
+    % case 7
+    %     if isempty(execution_id) && isempty(scenario_id)
+    %         title(['Mission plan. fval: ', num2str(fval), '.']);
+    %     elseif isempty(execution_id) && not(isempty(scenario_id))
+    %         title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), '. fval: ', num2str(fval), '.']);
+    %     elseif not(isempty(execution_id)) && isempty(scenario_id)
+    %         title(['Mission plan (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval), '.']);
+    %     else
+    %         title(['Mission plan for scenario: ', strrep(num2str(scenario_id),'_','\_'), ' (', strrep(execution_id,'_','\_'), '). fval: ', num2str(fval)]);
+    %     end
+    % end
+    % 
+    % if nargin > 5 && not(isempty(execution_id))
+    %     saveas(gcf, ['../fig/', execution_id], 'fig');
+    % end
 end

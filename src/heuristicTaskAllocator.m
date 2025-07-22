@@ -1,10 +1,10 @@
-% Initializer for sparseXATS: function [Agent, Task, allocation_order, S_R] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
-% Scalability tests: function [Agent, Task, allocation_order] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
-% Plan repair:
-function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
+% Initializer for sparseXATS or small-scale tests: function [Agent, Task, allocation_order, S_R] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, v, seed)
+% Scalability tests: function [Agent, Task, allocation_order] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, v, seed)
+% Plan repair: function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, v, seed)
+function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, v, seed)
     % arg_1 and arg_2 should either be Agent and Task or a valid scenario_id and optionally execution id.
     % reward_coefficients is an integer to select the reward coefficients to use.
-    % version is an integer to select the version of the algorithm to use:
+    % v is an integer to select the version of the algorithm to use:
     %   - 1:  original version. Task allocation order: first task from group 1 and then from group 2.
     %   - 2:  alternating version. Task allocation order: n tasks from group 1 with tasks from group 2 in between (begin and end with n tasks from group 1).
     %   - 3:  TODO: sand grains algorithm version. Task allocation order: first tasks from group 2, then try to fill waiting time gaps with tasks from group 1.
@@ -17,12 +17,18 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
     %   - 10: random sampling version. Robot selection step performs a random sampling of the robots after the deterministic robot selection and keeps the best robots selection in terms of makespan and waiting time.
     %   - 11: versions 9 and 10 combined.
     %   - 12: greedy version. task order according to version 7 and robot selection according to the buffet algorithm.
+    %   - 13: re-planning version. The delay is passed through the seed input parameter. Using version 9 (Heuristic version in T-RO). It takes and old plan and a delay and re-plans the plan leaving the tasks that are already executed or in progress, and re-allocating the tasks that haven't started yet or that are affected by the delay.
 
     % Note: S_R is needed to build the solution array, that is needed to process data in small scale experiments.
     % If we don't need to process data, we can remove S_R, Sta1s1a2s2, Rta1s1a2s2 and all the code related to them.
 
     % Note: Synchs and Relays outputs are needed in planRepair for the repair experiments.
     % If we are not using planRepair, we can remove Synchs and Relays and all the code related to them.
+
+    %? Note: remember to set the following flags according to the function definition
+    heuristicTaskAllocator_flag = false;
+    small_scale_tests_flag = false;
+    repair_flag = true;
 
     if nargin < 2
         arg_2 = [];
@@ -31,7 +37,6 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
     % Load Agent and Task
     if ischar(arg_1)
         scenario_id  = arg_1;
-        execution_id = arg_2;
 
         % Try loading scenario
         try
@@ -44,21 +49,23 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
     else
         Agent = arg_1;
         Task  = arg_2;
-        scenario_id  = [];
-        execution_id = [];
     end
 
     if nargin < 3 || isempty(reward_coefficients)
         reward_coefficients = 1;
     end
 
-    if nargin < 4 || isempty(version)
-        version = 1;
+    if nargin < 4 || isempty(v)
+        v = 1;
     end
 
-    % Set Task.nf to 1 to fix old generated scenarios that don't have it
-    for t = 1:length(Task)
-        Task(t).nf = 1;
+    % Check if the version is 13th: Re-planning version
+    if v == 13
+        % Check if the delay is already applied and propagated to other affected slots
+        if ~isfield(Agent, 'delay_s')
+            disp('You need to execute first the Repair Algorithm to generate the delay matrix');
+            error('A delay must be provided to use the re-planning version');
+        end
     end
     
     % Get  constant scenario values
@@ -66,23 +73,30 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
 
     % Initialize synchronization and relays structures
     % Case 1: we are using the heuristic as heuristicTaskAllocator for XATS or we need them for small scenario tests
-    % Sta1s1a2s2 = zeros(T-1,A,S,A,S);
-    % Rta1s1a2s2 = zeros(T-1,A,S,A,S);
+    if heuristicTaskAllocator_flag || small_scale_tests_flag
+        Sta1s1a2s2 = zeros(T-1,A,S,A,S);
+        Rta1s1a2s2 = zeros(T-1,A,S,A,S);
+
     % Case 2: we need synch and relays constraints for the plan repair tests
-    Synchs = [];
-    Relays = [];
+    elseif repair_flag
+        Synchs = [];
+        Relays = [];
+    end
 
     % Tolerance
     tol = 1e-6;
 
-    % Initialize the structures fields that stores robots' queue and times
-    for a = 1:A
-        Agent(a).queue   = 0;                           % S + 1
-        Agent(a).Td_s    = zeros(1,S);                  % S
-        Agent(a).Tw_s    = zeros(1,S);                  % S
-        Agent(a).Te_s    = zeros(1,S);                  % S
-        Agent(a).tfin_s  = zeros(1,S+1);                % S + 1
-        Agent(a).ac_Ft_s = [Agent(a).Ft_0, zeros(1,S)]; % S + 1
+    % Check if the version is not 13th: Re-planning version
+    if v ~= 13
+        % Initialize the structures fields that stores robots' queue and times
+        for a = 1:A
+            Agent(a).queue   = 0;                           % Agent(a).queue   = 0;                           % S + 1
+            Agent(a).Td_s    = zeros(1,1);                  % Agent(a).Td_s    = zeros(1,S);                  % S
+            Agent(a).Tw_s    = zeros(1,1);                  % Agent(a).Tw_s    = zeros(1,S);                  % S
+            Agent(a).Te_s    = zeros(1,1);                  % Agent(a).Te_s    = zeros(1,S);                  % S
+            Agent(a).tfin_s  = zeros(1,1+1);                % Agent(a).tfin_s  = zeros(1,S+1);                % S + 1
+            Agent(a).ac_Ft_s = [Agent(a).Ft_0, zeros(1,1)]; % Agent(a).ac_Ft_s = [Agent(a).Ft_0, zeros(1,S)]; % S + 1
+        end
     end
 
     % Initialize number of robots selected to simultaneously execute each task
@@ -106,7 +120,8 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
     n_samples = 0;
     best_solution_criteria = 0;
 
-    switch version
+    % Compute or initialize the task allocation order
+    switch v
     case {1, 2, 4, 6, 5, 7, 12}
         % Compute tasks "reward" to get the allocation order
         % Have into account task's:
@@ -173,10 +188,12 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
         group_all = all_idx(all_reward_idx);
 
         % Repeat each task t in group 1 Task(t).nf times consecutively
-        group_1 = repelem(group_1, [Task(group_1).nf]);
+        if group_1
+            group_1 = repelem(group_1, [Task(group_1).nf]);
+        end
 
         % Join indexed from both groups according to the selected version
-        switch version
+        switch v
         case 1
             % Allocate tasks from group 1 and then from group 2
             allocation_order = [group_1, group_2; ones(1, length(group_1)), 2 * ones(1, length(group_2))];
@@ -251,7 +268,7 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
             end
 
             % Greedy task allocation
-            if version == 12
+            if v == 12
                 % Add the number of robots needed to the allocation_order matrix
                 for t = 1:length(allocation_order)
                     if allocation_order(2, t) == 1
@@ -317,7 +334,7 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
                 end
             end
         end
-    case {8, 9, 10, 11}
+    case {8, 9, 10, 11, 13}
         % Tasks "rewards" will be sorted in hierarchical order:
         %   - Deadline (tmax): meet / not meet, with a safety gap relative to the task execution time. E.g. Tmax_t < current_makespan + 1'55 * nf(t) * Te_t / n^f_t
         %   - Incremented makespan: first the tasks that increase less makespan
@@ -331,6 +348,72 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
         % Note: we don't need to repeat task from group 1 now, as they will have the same reward and we will just keep the record of how many time the have already been allocated using nf.
         nf = [Task.nf];
 
+        % Check if the version is 13th: Re-planning version
+        %? Note: this algorithm will only work for scenarios that can be repaired for now. As the repair algorithm now also changes the slots order in each queue to place all executed slots at the beginning and all failed or not started slots at the end. Now the only not repairable case is when the originally delayed slot gets too much delay and the robot fails because of the battery constraints. With no battery enough to reach the charging station. (TODO: we could just say that in this situation, robots automatically go to recharge, so we will only need to place a recharging task at the final moment of the battery)
+        % Note: The coordination point is initialized later. That should work for the re-planning case.
+        
+        % Note: In re-planning we need to relax the "No 2 consecutive recharge tasks" constraint (at least if we are not using an aux task to represent the lost time).
+        % TODO: I need to find out where I have to include delay_s. In planRepair was in updateTfin() and updateAcFts().
+        if v == 13
+            %? TODO Debug: Check if the finish time remains the same for executed slots
+            % Save a copy of the current finish times to debug later
+            Ft_a_s = zeros(A,S);
+            for a = 1:A
+                for s = 1:length(Agent(a).queue) - 1
+                    Ft_a_s(a, s) = Agent(a).tfin_s(s + 1);
+                end
+            end
+
+            % Initialize the fragments counter
+            fragments_counter = zeros(2,T);
+            fragments_counter(1,:) = [1:T];
+
+            % Check which fragments has been executed
+            for a = 1:A
+                for s = 1:length(Agent(a).queue) - 1
+                    % Check if this slot has been executed
+                    if Agent(a).executed_flag_s(s)
+                        % Increment the fragments counter for the task in this slot
+                        % Note: For simplicity, we are also counting the recharges. We can ignore that later
+                        fragments_counter(2, Agent(a).queue(s + 1)) = fragments_counter(2, Agent(a).queue(s + 1)) + 1;
+
+                    % Remove not executed slots from the queue (they should be sorted, no more executed slots after the first not executed slot)
+                    else
+                        Agent(a).queue(s + 1:end) = [];
+                        break;
+                    end
+                end
+            end
+
+            % Remove executed tasks from group 1 and set nf value for the rest
+            % Note: Group 1 tasks (fragmentable) are completely allocated if nf * na fragments are executed. I need to compute how many nf are missing: nf = n / na (it should be a round result).
+            tmp_tf_idx = tf_idx;
+            for i = 1:length(tmp_tf_idx)
+                t = tmp_tf_idx(i);
+                % Compute the number of coalitions missing
+                nf(t) = nf(t) - fragments_counter(2, t) / na(t);
+
+                % If there are no more coalitions to allocate, remove this task from the list
+                if nf(t) == 0
+                    % Find the task in the group 1 list and remove it
+                    tf_idx(tf_idx == t) = [];
+                end
+            end
+
+            % Remove executed tasks from group 2
+            % Note: Group 2 tasks (relayable) are completely allocated if any fragment is executed.
+            tmp_tr_idx = tr_idx;
+            for i = 1:length(tmp_tr_idx)
+                t = tmp_tr_idx(i);
+
+                % Check if this task has been allocated
+                if fragments_counter(2, t)
+                    % Find the task in the group 2 list and remove it
+                    tr_idx(tr_idx == t) = [];
+                end
+            end
+        end
+
         % Initialize the random number generator seed
         rng('shuffle');
 
@@ -343,7 +426,7 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
         % allocation_order_log = [];
         % determinant_reward_log = [];
 
-        switch version
+        switch v
         case {10, 11}
             % Initialize the number of samples (including the deterministic one)
             n_samples = 1000;
@@ -370,7 +453,7 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
     task = 1;
     while task <= size(allocation_order, 2)
         % Get the waiting time that each one of the remaining tasks would introduce and the makespan increment if allocated next
-        switch version
+        switch v
         case {8, 10}
             % Initialize the introduced waiting time
             for task_8 = 1:size(allocation_order, 2)
@@ -381,7 +464,7 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
                 Task(t).joint_introduced_waiting_time = 0;
                 Task(t).introduced_makespan = 0;
             end
-        case {9, 11}
+        case {9, 11, 13}
             % Compute the introduced waiting time for each remaining task and save the allocation information for later
             for task_9 = 1:size(allocation_order, 2)
                 % Get task's id and group
@@ -392,19 +475,32 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
                 compatible_robots = find(ismember([Agent.type], Task(t).Hr));
 
                 % Get the compatible robots' time information
-                [robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery] = compatibleRobotsTimeInformation(Agent, Task, t, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R);
+                [robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, failed_robot_flags] = compatibleRobotsTimeInformation(Agent, Task, t, v, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R);
+
+                % Remove from compatible robots those who have failed (negative battery)
+                % Note: robot_remaining_battery includes Td_a_t_t(a, t, last_task + 1) and delay, i.e., 
+                compatible_robots_length = length(compatible_robots);
+                compatible_robots = compatible_robots(~ismember(compatible_robots, find(failed_robot_flags)));
+                if length(compatible_robots) ~= compatible_robots_length
+                    % Get the compatible robots' time information again
+                    [robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, ~] = compatibleRobotsTimeInformation(Agent, Task, t, v, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R);
+                end
+
+                if length(compatible_robots) < na(t)
+                    error(['There are not enough compatible robots to meet the requested coalition size for task ', Task(t).name, ' because some robots failed (negative battery)']);
+                end
 
                 % Perform the robot selection for the task to get the introduced waiting time and the allocation information
                 if group == 1
-                    [Task(t).selected_robots, Task(t).pre_recharge, Task(t).coalition_finishing_time, Task(t).joint_introduced_waiting_time, Task(t).introduced_makespan] = robotSelectionGroup1(Agent, Task, t, version, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol);
+                    [Task(t).selected_robots, Task(t).pre_recharge, Task(t).coalition_finishing_time, Task(t).joint_introduced_waiting_time, Task(t).introduced_makespan] = robotSelectionGroup1(Agent, Task, t, v, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol);
                 else
-                    [Task(t).selected_robots,  Task(t).task_plan, Task(t).pre_recharge, Task(t).plan_finish_time, Task(t).joint_introduced_waiting_time, Task(t).introduced_makespan] = robotSelectionGroup2(Agent, Task, t, version, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol);
+                    [Task(t).selected_robots,  Task(t).task_plan, Task(t).pre_recharge, Task(t).plan_finish_time, Task(t).joint_introduced_waiting_time, Task(t).introduced_makespan] = robotSelectionGroup2(Agent, Task, t, v, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol);
                 end
             end
         end
 
-        switch version
-        case {8, 9, 10, 11}
+        switch v
+        case {8, 9, 10, 11, 13}
             % To make the last criteria random, we can start by randomizing the tasks. In that way, we can break ties in the previous criteria by using the default (random) order.
             allocation_order = allocation_order(:,randperm(size(allocation_order, 2)));
 
@@ -434,6 +530,12 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
 
                 % Get the indexes of the compatible robots
                 compatible_robots = find(ismember([Agent.type], Task(t).Hr));
+
+                % Get the compatible robots' time information
+                [~, ~, ~, failed_robot_flags] = compatibleRobotsTimeInformation(Agent, Task, t, v, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R);
+
+                % Remove from compatible robots those who have failed (negative battery)
+                compatible_robots = compatible_robots(~ismember(compatible_robots, find(failed_robot_flags)));
 
                 % Initialize the traveling distance
                 Td = [];
@@ -488,11 +590,23 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
         compatible_robots = find(ismember([Agent.type], Task(t).Hr));
 
         % Get the compatible robots' time information
-        [robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery] = compatibleRobotsTimeInformation(Agent, Task, t, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R);
+        [robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, failed_robot_flags] = compatibleRobotsTimeInformation(Agent, Task, t, v, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R);
+
+        % Remove from compatible robots those who have failed (negative battery)
+        compatible_robots_length = length(compatible_robots);
+        compatible_robots = compatible_robots(~ismember(compatible_robots, find(failed_robot_flags)));
+        if length(compatible_robots) ~= compatible_robots_length
+            % Get the compatible robots' time information again
+            [robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, ~] = compatibleRobotsTimeInformation(Agent, Task, t, v, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R);
+        end
+
+        if length(compatible_robots) < na(t)
+            error(['There are not enough compatible robots to meet the requested coalition size for task ', Task(t).name, ' because some robots failed (negative battery)']);
+        end
 
         % Allocate task from group 1
         if group == 1
-            if version == 9
+            if v == 9 || v == 13
                 % Get the robot selection information from the Task structure
                 selected_robots               = Task(t).selected_robots;
                 pre_recharge                  = Task(t).pre_recharge;
@@ -500,23 +614,29 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
                 joint_introduced_waiting_time = Task(t).joint_introduced_waiting_time;
                 introduced_makespan           = Task(t).introduced_makespan;
             else
-                if version == 12
+                if v == 12
                     % Get the robot selection information from the food stations cell
                     pre_selected_robots = food_stations{task};
                 end
 
                 % Select the robots that will execute the task
-                [selected_robots, pre_recharge, coalition_finishing_time, joint_introduced_waiting_time, introduced_makespan] = robotSelectionGroup1(Agent, Task, t, version, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol);
+                [selected_robots, pre_recharge, coalition_finishing_time, joint_introduced_waiting_time, introduced_makespan] = robotSelectionGroup1(Agent, Task, t, v, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol);
             end
+
             % Allocate the task to the selected robots
-            % [Agent, Sta1s1a2s2] = allocateTaskGroup1(Agent, Task, t, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Sta1s1a2s2, tol);
-            % [Agent] = allocateTaskGroup1(Agent, Task, t, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, tol);
-            [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Synchs, tol);
+            if heuristicTaskAllocator_flag || small_scale_tests_flag
+                [Agent, Sta1s1a2s2] = allocateTaskGroup1(Agent, Task, t, v, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Sta1s1a2s2, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag);
+            elseif repair_flag
+                [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, v, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Synchs, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag);
+            else
+                [Agent] = allocateTaskGroup1(Agent, Task, t, v, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag);
+            end
+            
         end
 
         % Allocate task from group 2
         if group == 2
-            if version == 9
+            if v == 9 || v == 13
                 % Get the robot selection information from the Task structure
                 selected_robots               = Task(t).selected_robots;
                 task_plan                     = Task(t).task_plan;
@@ -525,26 +645,30 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
                 joint_introduced_waiting_time = Task(t).joint_introduced_waiting_time;
                 introduced_makespan           = Task(t).introduced_makespan;
             else
-                if version == 12
+                if v == 12
                     % Get the robot selection information from the food stations cell
                     pre_selected_robots = food_stations{task};
                 end
 
                 % Select the robots that will execute the task
-                [selected_robots,  task_plan, pre_recharge, plan_finish_time, joint_introduced_waiting_time, introduced_makespan] = robotSelectionGroup2(Agent, Task, t, version, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol);
+                [selected_robots,  task_plan, pre_recharge, plan_finish_time, joint_introduced_waiting_time, introduced_makespan] = robotSelectionGroup2(Agent, Task, t, v, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol);
             end
             % Allocate the task to the selected robots
-            % [Agent, Sta1s1a2s2, Rta1s1a2s2] = allocateTaskGroup2(Agent, Task, t, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Sta1s1a2s2, Rta1s1a2s2, tol);
-            % [Agent] = allocateTaskGroup2(Agent, Task, t, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, tol);
-            [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Synchs, Relays, tol);
+            if heuristicTaskAllocator_flag || small_scale_tests_flag
+                [Agent, Sta1s1a2s2, Rta1s1a2s2] = allocateTaskGroup2(Agent, Task, t, v, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Sta1s1a2s2, Rta1s1a2s2, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag);
+            elseif repair_flag
+                [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, v, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Synchs, Relays, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag);
+            else
+                [Agent] = allocateTaskGroup2(Agent, Task, t, v, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag);
+            end
         end
 
-        % Update information for the next task
-        switch version
+        % Update task counter or allocation order for the next task
+        switch v
         case {1, 2, 4, 6, 5, 7, 12}
             % Update the task index
             task = task + 1;
-        case {8, 9, 10, 11}
+        case {8, 9, 10, 11, 13}
             % Delete the task from the list
             if group == 1
                 nf(t) = nf(t) - 1;
@@ -562,68 +686,97 @@ function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, re
         end
     end
 
-    % Print information into the log file
-    % switch version
-    % case {8, 9, 10, 11}
-    %     fprintf(allocation_order_log_file, ['Allocation order: ', allocation_order_log, '\n']);
-    %     fprintf(allocation_order_log_file, ['Decisive  reward: ', determinant_reward_log, '\n']);
-    % end
-
-    % Fill the empty tfin slots with the last tfin value
-    for a = 1:A
-        for slot = length(Agent(a).queue) + 1:S + 1
-            Agent(a).tfin_s(slot) = Agent(a).tfin_s(slot - 1);
-        end
-    end
-
     % Check if heuristicTaskAllocator has used more than S slots
     heuristicTaskAllocator_S = 0;
     for a = 1:A
         if length(Agent(a).queue) - 1 > heuristicTaskAllocator_S
-            heuristicTaskAllocator_S = length(Agent(a).queue);
+            heuristicTaskAllocator_S = length(Agent(a).queue) - 1;
         end
     end
+    
+    if heuristicTaskAllocator_flag || small_scale_tests_flag
+        % Fill the empty tfin slots with the last tfin value
+        for a = 1:A
+            for slot = length(Agent(a).queue) + 1:max(S, heuristicTaskAllocator_S) + 1
+                Agent(a).tfin_s(slot) = Agent(a).tfin_s(slot - 1);
+            end
+        end
 
-    % if heuristicTaskAllocator_S ~= S
-    %     % Check if the size of Sta1s1a2s2 need to be corrected
-    %     if size(Sta1s1a2s2, 3) < heuristicTaskAllocator_S
-    %         Sta1s1a2s2(1, 1, heuristicTaskAllocator_S, 1, 1) = 0;
-    %     end
-    %     if size(Sta1s1a2s2, 5) < heuristicTaskAllocator_S
-    %         Sta1s1a2s2(1, 1, 1, 1, heuristicTaskAllocator_S) = 0;
-    %     end
-    % 
-    %     % Check if the size of Rta1s1a2s2 need to be corrected
-    %     if size(Rta1s1a2s2, 3) < heuristicTaskAllocator_S
-    %         Rta1s1a2s2(1, 1, heuristicTaskAllocator_S, 1, 1) = 0;
-    %     end
-    %     if size(Rta1s1a2s2, 5) < heuristicTaskAllocator_S
-    %         Rta1s1a2s2(1, 1, 1, 1, heuristicTaskAllocator_S) = 0;
-    %     end
-    % end
+        if heuristicTaskAllocator_S ~= S
+            % Check if the size of Sta1s1a2s2 need to be corrected
+            if size(Sta1s1a2s2, 3) < heuristicTaskAllocator_S
+                Sta1s1a2s2(1, 1, heuristicTaskAllocator_S, 1, 1) = 0;
+            end
+            if size(Sta1s1a2s2, 5) < heuristicTaskAllocator_S
+                Sta1s1a2s2(1, 1, 1, 1, heuristicTaskAllocator_S) = 0;
+            end
+        
+            % Check if the size of Rta1s1a2s2 need to be corrected
+            if size(Rta1s1a2s2, 3) < heuristicTaskAllocator_S
+                Rta1s1a2s2(1, 1, heuristicTaskAllocator_S, 1, 1) = 0;
+            end
+            if size(Rta1s1a2s2, 5) < heuristicTaskAllocator_S
+                Rta1s1a2s2(1, 1, 1, 1, heuristicTaskAllocator_S) = 0;
+            end
+        end
 
-    % Reshape decision variables
-    % Sta1s1a2s2 = reshape(Sta1s1a2s2,1,[]);
-    % Rta1s1a2s2 = reshape(Rta1s1a2s2,1,[]);
+        % Reshape decision variables
+        Sta1s1a2s2 = reshape(Sta1s1a2s2,1,[]);
+        Rta1s1a2s2 = reshape(Rta1s1a2s2,1,[]);
 
-    % Put all decision variables together
-    % S_R = [Sta1s1a2s2 Rta1s1a2s2];
+        % Put all decision variables together
+        S_R = [Sta1s1a2s2 Rta1s1a2s2];
+
+    elseif repair_flag && v == 13
+        % Fill the empty executed_flag and delay slots
+        for a = 1:A
+            % Note: Any missing slots before this one (1 outsize the final length of the queue) will be fill with 0
+            Agent(a).executed_flag_s(length(Agent(a).queue) + 1) = 0;
+            Agent(a).delay_s(length(Agent(a).queue) + 1) = 0;
+
+            % Delete the extra slot
+            Agent(a).executed_flag_s(length(Agent(a).queue) + 1) = [];
+            Agent(a).delay_s(length(Agent(a).queue) + 1) = [];
+        end
+    end
 
     % Save na in Task structure
     for t = 1:length(Task)
         Task(t).na = na(t);
     end
+
+    %? TODO Debug: Check again if the finish time remains the same for executed slots
+    if v == 13
+        for a = 1:A
+            for s = 1:(length(Agent(a).queue) - 1) - 1
+                if Agent(a).executed_flag_s(s) && abs(Ft_a_s(a, s) - Agent(a).tfin_s(s + 1)) > tol
+                    error(['Error: ', Task(Agent(a).queue(s + 1)).name, ' in slot ', num2str(s), ' of agent ', num2str(a), ' is executed, but its Ft has changed (end).']);
+                end
+            end
+        end
+    end
 end
 
 % Compute the waiting time for robot a
-function [waiting_time] = getWaitingTime(a, t, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge, coalition_finishing_time, tol)
-    if pre_recharge
-        waiting_time = coalition_finishing_time - Te_t_nf(t, Task(t).nf) - Td_a_t_t(a, t, R + 1) - Te_t_nf(R, Task(R).nf) - Td_a_t_t(a, R, Agent(a).queue(last_slot + 1) + 1) - Agent(a).tfin_s(last_slot + 1);
+function [waiting_time] = getWaitingTime(a, t, v, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge, coalition_finishing_time, tol)
+    % Check if there is a delay in the next slot
+    if v == 13
+        try
+            delay = Agent(a).delay_s(last_slot + 1);
+        catch
+            delay = 0;
+        end
     else
-        waiting_time = coalition_finishing_time - Te_t_nf(t, Task(t).nf) - Td_a_t_t(a, t, Agent(a).queue(last_slot + 1) + 1) - Agent(a).tfin_s(last_slot + 1);
+        delay = 0;
+    end
+
+    if pre_recharge
+        waiting_time = coalition_finishing_time - delay - Te_t_nf(t, Task(t).nf) - Td_a_t_t(a, t, R + 1) - Te_t_nf(R, Task(R).nf) - Td_a_t_t(a, R, Agent(a).queue(last_slot + 1) + 1) - Agent(a).tfin_s(last_slot + 1);
+    else
+        waiting_time = coalition_finishing_time - delay - Te_t_nf(t, Task(t).nf) - Td_a_t_t(a, t, Agent(a).queue(last_slot + 1) + 1) - Agent(a).tfin_s(last_slot + 1);
     end
     if waiting_time < - tol
-        error(['Negative waiting time for robot ', num2str(a), ' and task ', num2str(t - 1),'. This scenario can''t be solved or this algorithm can''t find a valid solution']);
+        error(['Negative waiting time for robot ', num2str(a), ' and task ', Task(t).name,'. This scenario can''t be solved or this algorithm can''t find a valid solution']);
     end
 end
 
@@ -641,19 +794,32 @@ function [Agent] = updateCoordinationPoint(Agent, Task, a, t, group, last_slot, 
 end
 
 % Update tfin and acFt from slot coordination_point(a) to last_slot - 1
-function [Agent] = updateTfinAcFt(Agent, a, last_slot, R)
-    for slot = Agent(a).coordination_point : last_slot - 1
-        % Update tfin for the current task
-        Agent(a).tfin_s(slot + 1)  = Agent(a).tfin_s(slot - 1 + 1) + Agent(a).Td_s(slot) + Agent(a).Tw_s(slot) + Agent(a).Te_s(slot);
-        % If current task is a recharge, add only the displacement time to the accumulated flight time
-        if Agent(a).queue(slot + 1) == R
-            Agent(a).ac_Ft_s(slot + 1) = Agent(a).Td_s(slot);
+function [Agent] = updateTfinAcFt(Agent, a, v, last_slot, R)
+    for s = Agent(a).coordination_point : last_slot - 1
+        % Check if there is a delay in the next slot
+        if v == 13
+            try
+                delay = Agent(a).delay_s(s);
+            catch
+                delay = 0;
+            end
         else
-            Agent(a).ac_Ft_s(slot + 1) = Agent(a).Td_s(slot) + Agent(a).Tw_s(slot) + Agent(a).Te_s(slot);
+            delay = 0;
         end
+
+        % Update tfin for the current task
+        Agent(a).tfin_s(s + 1)  = Agent(a).tfin_s((s - 1) + 1) + delay + Agent(a).Td_s(s) + Agent(a).Tw_s(s) + Agent(a).Te_s(s);
+
+        % If current task is a recharge, add only the displacement time to the accumulated flight time
+        if Agent(a).queue(s + 1) == R
+            Agent(a).ac_Ft_s(s + 1) = Agent(a).Td_s(s);
+        else
+            Agent(a).ac_Ft_s(s + 1) = delay + Agent(a).Td_s(s) + Agent(a).Tw_s(s) + Agent(a).Te_s(s);
+        end
+
         % If the previous task was not a recharge, add also the previous accumulated flight time
-        if Agent(a).queue(slot - 1 + 1) ~= R
-            Agent(a).ac_Ft_s(slot + 1) = Agent(a).ac_Ft_s(slot + 1) + Agent(a).ac_Ft_s(slot - 1 + 1);
+        if Agent(a).queue((s - 1) + 1) ~= R
+            Agent(a).ac_Ft_s(s + 1) = Agent(a).ac_Ft_s(s + 1) + Agent(a).ac_Ft_s((s - 1) + 1);
         end
     end
 end
@@ -664,31 +830,48 @@ function [makespan] = getMakespan(Agent)
 end
 
 % Get the compatible robots' time information
-function [robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery] = compatibleRobotsTimeInformation(Agent, Task, t, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R)
+function [robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, failed_robot_flags] = compatibleRobotsTimeInformation(Agent, Task, t, v, compatible_robots, na, Td_a_t_t, Te_t_nf, A, R)
     robot_finish_time              = inf * ones(1,A);
     robot_pre_recharge_finish_time = inf * ones(1,A);
     robot_remaining_battery        = zeros(1,A);
+    failed_robot_flags             = zeros(1,A);
     for robot = 1:length(compatible_robots)
         a = compatible_robots(robot);
         last_slot = length(Agent(a).queue) - 1;
         last_task = Agent(a).queue(last_slot + 1);
 
+        % Check if there is a delay in the next slot
+        if v == 13
+            try
+                delay = Agent(a).delay_s(last_slot + 1);
+            catch
+                delay = 0;
+            end
+        else
+            delay = 0;
+        end
+
         % Check if the robot has total flight time enough to execute the task and go back to the recharge station
         if Td_a_t_t(a, t, R + 1) + Te_t_nf(t, Task(t).nf) + Td_a_t_t(a, R, t + 1) < Agent(a).Ft - Agent(a).Ft_saf
             % Compute agents finish time without a previous recharge
-            robot_finish_time(a) = Agent(a).tfin_s(last_slot + 1) + Td_a_t_t(a, t, last_task + 1);
+            robot_finish_time(a) = Agent(a).tfin_s(last_slot + 1) + Td_a_t_t(a, t, last_task + 1) + delay;
 
             % Compute agents finish time with a previous recharge
-            robot_pre_recharge_finish_time(a) = Agent(a).tfin_s(last_slot + 1) + Td_a_t_t(a, R, last_task + 1) + Te_t_nf(R, Task(R).nf) + Td_a_t_t(a, t, R + 1);
+            robot_pre_recharge_finish_time(a) = Agent(a).tfin_s(last_slot + 1) + Td_a_t_t(a, R, last_task + 1) + Te_t_nf(R, Task(R).nf) + Td_a_t_t(a, t, R + 1) + delay;
 
             % Get the remaining battery of each compatible robot having into account the safety margin, the initial displacement to the task place and the return to the recharge station
-            robot_remaining_battery(a) = Agent(a).Ft - Agent(a).Ft_saf - Agent(a).ac_Ft_s(last_slot + 1) - Td_a_t_t(a, t, last_task + 1) - Td_a_t_t(a, R, t + 1);
+            robot_remaining_battery(a) = Agent(a).Ft - Agent(a).Ft_saf - Agent(a).ac_Ft_s(last_slot + 1) - Td_a_t_t(a, t, last_task + 1) - Td_a_t_t(a, R, t + 1) - delay;
+
+            % Check if this robot has battery enough to reach the recharging station
+            failed_robot_flags(a) = Agent(a).Ft - Agent(a).Ft_saf - Agent(a).ac_Ft_s(last_slot + 1) - delay - Td_a_t_t(a, R, last_task + 1) < 0;
+
+            %? Future work (TODO): Maybe I can use this place to include the "emergency recharge" in case a delay make this robots run out of battery (if failed_robot_flags(a) == 1). I'd need to be careful and update everything I need after including the automatic recharge. 
         end
     end
 end
 
 % Robot selection for group 1
-function [selected_robots, pre_recharge, coalition_finishing_time, joint_introduced_waiting_time, introduced_makespan] = robotSelectionGroup1(Agent, Task, t, version, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol)
+function [selected_robots, pre_recharge, coalition_finishing_time, joint_introduced_waiting_time, introduced_makespan] = robotSelectionGroup1(Agent, Task, t, v, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol)
     % Extract the coordination_point from the Agent structure
     coordination_point = [Agent.coordination_point];
 
@@ -705,8 +888,11 @@ function [selected_robots, pre_recharge, coalition_finishing_time, joint_introdu
     compatible_robots = sort_idx(ismember(sort_idx, compatible_robots));
 
     % Check if there are at least na(t) compatible robots
+    if length(compatible_robots) < na(t)
+        error(['There are not enough compatible robots to meet the requested coalition size for task ', Task(t).name, ' because some robots failed (negative battery)']);
+    end
     if sum([finish_time ~= Inf]) < na(t)
-        error(['There are not enough compatible robots to meet the requested coalition size for task ', num2str(t - 1)]);
+        error(['There are not enough compatible robots to meet the requested coalition size for task ', Task(t).name, ' .This scenario can''t be solved or this algorithm can''t find a valid solution']);
     end
 
     % Get the current makespan
@@ -720,7 +906,7 @@ function [selected_robots, pre_recharge, coalition_finishing_time, joint_introdu
     best_introduced_makespan           = inf;
 
     % Initialize the number of samples
-    switch version
+    switch v
     case {10, 11}
         sample_counter = n_samples;
     otherwise
@@ -736,13 +922,13 @@ function [selected_robots, pre_recharge, coalition_finishing_time, joint_introdu
         end
 
         % Select robots randomly from compatible and valid ones
-        if version == 6 || ((version == 10 || version == 11) && not(isempty(best_robot_selection)))
+        if v == 6 || ((v == 10 || v == 11) && not(isempty(best_robot_selection)))
             % Pre-select robots with total flight time enough to execute the task and go back to the recharge station
             selected_robots = find(robot_finish_time ~= Inf);
 
             % Randomize selected robots
             selected_robots = selected_robots(randperm(length(selected_robots), na(t)));
-        elseif version == 12
+        elseif v == 12
             % Use the pre-selected robots
             selected_robots = pre_selected_robots;
         else
@@ -776,7 +962,7 @@ function [selected_robots, pre_recharge, coalition_finishing_time, joint_introdu
                 pre_recharge = new_pre_recharge;
 
                 % Update the selected robots in case we didn't use the random version
-                if not(version == 6 || ((version == 10 || version == 11) && not(isempty(best_robot_selection))) || version == 12)
+                if not(v == 6 || ((v == 10 || v == 11) && not(isempty(best_robot_selection))) || v == 12)
                     % Compute robots' finish time with the new pre-recharge flags
                     finish_time = robot_finish_time .* (1 - pre_recharge) + robot_pre_recharge_finish_time .* pre_recharge + Te_t_nf(t, Task(t).nf);
 
@@ -816,7 +1002,7 @@ function [selected_robots, pre_recharge, coalition_finishing_time, joint_introdu
             last_slot = length(Agent(a).queue) - 1;
 
             % Compute the waiting time for robot a including recharging time as waiting time
-            joint_introduced_waiting_time = joint_introduced_waiting_time + getWaitingTime(a, t, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge(a), coalition_finishing_time, tol) + pre_recharge(a) * Te_t_nf(R, Task(R).nf);
+            joint_introduced_waiting_time = joint_introduced_waiting_time + getWaitingTime(a, t, v, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge(a), coalition_finishing_time, tol) + pre_recharge(a) * Te_t_nf(R, Task(R).nf);
         end
 
         % Compute the incremented makespan
@@ -830,7 +1016,7 @@ function [selected_robots, pre_recharge, coalition_finishing_time, joint_introdu
         flag_update = false;
 
         % Check if the current solution is better than the best one
-        switch version
+        switch v
         case {10, 11}
             switch best_solution_criteria
             case 1
@@ -880,13 +1066,18 @@ function [selected_robots, pre_recharge, coalition_finishing_time, joint_introdu
 end
 
 % Robot selection for group 2
-function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_introduced_waiting_time, introduced_makespan] = robotSelectionGroup2(Agent, Task, t, version, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol)
+function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_introduced_waiting_time, introduced_makespan] = robotSelectionGroup2(Agent, Task, t, v, pre_selected_robots, n_samples, best_solution_criteria, compatible_robots, robot_finish_time, robot_pre_recharge_finish_time, robot_remaining_battery, na, Td_a_t_t, Te_t_nf, R, tol)
     % Extract the coordination_point from the Agent structure
     coordination_point = [Agent.coordination_point];
     
+    % Check if there are at least na(t) compatible robots
+    if length(compatible_robots) < na(t)
+        error(['There are not enough compatible robots to meet the requested coalition size for task ', Task(t).name, ' because some robots failed (negative battery)']);
+    end
+
     % Check if the number of compatible robots is equal or greater than na
     if Task(t).nc < na(t)
-        error(['There is no compatible robot enough to meet the requested coalition size for task ', num2str(t - 1)]);
+        error(['Invalid scenario. There are no compatible robots enough to meet the requested coalition size for task ', Task(t).name]);
     end
 
     % Sort the compatible order in descending order according to the finish time of the last task
@@ -1026,7 +1217,7 @@ function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_intr
     best_joint_introduced_waiting_time = inf;
     best_introduced_makespan           = inf;
 
-    switch version
+    switch v
     case {6, 10, 11}
         % Initialize the number of robot samples
         sample_counter_robots = n_samples;
@@ -1085,10 +1276,10 @@ function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_intr
         end
 
         % Select robots randomly from compatible ones (we are not checking if they have total flight time enough to execute the task and go back to the recharge station)
-        if version == 6 || ((version == 10 || version == 11) && not(isempty(best_robot_selection)))
+        if v == 6 || ((v == 10 || v == 11) && not(isempty(best_robot_selection)))
             % Randomize selected robots
             selected_robots = compatible_robots(sort(randperm(length(compatible_robots), size(task_plan,1))));
-        elseif version == 12
+        elseif v == 12
             % Use the pre-selected robots
             selected_robots = pre_selected_robots(1:size(task_plan,1));
         else
@@ -1097,7 +1288,7 @@ function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_intr
         end
 
         % Initialize the number of row samples
-        switch version
+        switch v
         case 6
             sample_counter_rows = 0;
         case {10, 11}
@@ -1113,7 +1304,7 @@ function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_intr
             end
 
             % Sort rows from the task plan randomly
-            if version == 6 || ((version == 10 || version == 11) && not(isempty(best_robot_selection)))
+            if v == 6 || ((v == 10 || v == 11) && not(isempty(best_robot_selection)))
                 % Sort the rows of each task plan part randomly
                 base_random_order        = randperm(size(task_plan_base,        1));
                 middle_down_random_order = randperm(size(task_plan_middle_down, 1));
@@ -1198,7 +1389,7 @@ function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_intr
                 first_t_finish_time = plan_init_time + first_t_idx * Te_t_nf(t, Task(t).nf);
 
                 % Compute the waiting time for robot a including recharging time as waiting time
-                joint_introduced_waiting_time = joint_introduced_waiting_time + getWaitingTime(a, t, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge(robot), first_t_finish_time, tol) + pre_recharge(robot) * Te_t_nf(R, Task(R).nf);
+                joint_introduced_waiting_time = joint_introduced_waiting_time + getWaitingTime(a, t, v, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge(robot), first_t_finish_time, tol) + pre_recharge(robot) * Te_t_nf(R, Task(R).nf);
             end
 
             % Compute the incremented makespan
@@ -1212,7 +1403,7 @@ function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_intr
             flag_update = false;
 
             % Check if the current solution is better than the best one
-            switch version
+            switch v
             case {10, 11}
                 switch best_solution_criteria
                 case 1
@@ -1255,7 +1446,7 @@ function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_intr
         end
 
         % Update the number of samples
-        switch version
+        switch v
         case {10, 11}
             sample_counter_robots = sample_counter_robots - 1;
         end
@@ -1268,9 +1459,10 @@ function [selected_robots, task_plan, pre_recharge, plan_finish_time, joint_intr
 end
 
 % Allocate task group 1
-% function [Agent, Sta1s1a2s2] = allocateTaskGroup1(Agent, Task, t, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Sta1s1a2s2, tol)
-% function [Agent] = allocateTaskGroup1(Agent, Task, t, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, tol)
-function [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Synchs, tol)
+% Initializer for sparseXATS or small-scale tests: function [Agent, Sta1s1a2s2] = allocateTaskGroup1(Agent, Task, t, v, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Sta1s1a2s2, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag)
+% Plan repair: function [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, v, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Synchs, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag)
+% Other: function [Agent] = allocateTaskGroup1(Agent, Task, t, v, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag)
+function [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, v, selected_robots, pre_recharge, coalition_finishing_time, na, Td_a_t_t, Te_t_nf, R, Synchs, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag)
     % Initialize the selected robots and slots lists (synchronization constraints)
     coalition_robot = [];
     coalition_slot  = [];
@@ -1287,7 +1479,7 @@ function [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, selected_robots, p
         last_slot = length(Agent(a).queue) - 1;
 
         % Compute the waiting time for robot a
-        waiting_time = getWaitingTime(a, t, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge(a), coalition_finishing_time, tol);
+        waiting_time = getWaitingTime(a, t, v, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge(a), coalition_finishing_time, tol);
 
         % Check if robot needs a previous recharge
         if pre_recharge(a)
@@ -1300,11 +1492,23 @@ function [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, selected_robots, p
             % Update coordination point
             Agent = updateCoordinationPoint(Agent, Task, a, R, 1, last_slot, na, R);
 
+            % Check if there is a delay in this slot
+            if v == 13
+                try
+                    delay = Agent(a).delay_s(last_slot);
+                catch
+                    delay = 0;
+                end
+            else
+                delay = 0;
+            end
+
             % Update robot times (here there are a few extra "- 1" in Agent.queue compared with the code above because we already added the recharge task to the queue)
             Agent(a).Td_s(last_slot)    = Td_a_t_t(a, R, Agent(a).queue(last_slot - 1 + 1) + 1);
             Agent(a).Te_s(last_slot)    = Te_t_nf(R, Task(R).nf);
-            Agent(a).tfin_s(last_slot + 1)  = Agent(a).tfin_s(last_slot - 1 + 1) + Agent(a).Td_s(last_slot) + Agent(a).Te_s(last_slot);
+            Agent(a).tfin_s(last_slot + 1)  = Agent(a).tfin_s(last_slot - 1 + 1) + delay + Agent(a).Td_s(last_slot) + Agent(a).Te_s(last_slot);
             Agent(a).ac_Ft_s(last_slot + 1) = Agent(a).Td_s(last_slot);
+            
             % If last task was not a recharge, add also the last accumulated flight time
             if Agent(a).queue(last_slot - 1 + 1) ~= R
                 Agent(a).ac_Ft_s(last_slot + 1) = Agent(a).ac_Ft_s(last_slot + 1) + Agent(a).ac_Ft_s(last_slot - 1 + 1);
@@ -1328,7 +1532,7 @@ function [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, selected_robots, p
             waiting_time = 0;
 
             % Update tfin and acFt from slot coordination_point(a) to last_slot
-            Agent = updateTfinAcFt(Agent, a, last_slot, R);
+            Agent = updateTfinAcFt(Agent, a, v, last_slot, R);
         end
 
         % Update coordination point
@@ -1337,12 +1541,23 @@ function [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, selected_robots, p
         % Save the slot of the robot (synchronization constraints)
         coalition_slot = [coalition_slot, last_slot];
 
+        % Check if there is a delay in this slot
+        if v == 13
+            try
+                delay = Agent(a).delay_s(last_slot);
+            catch
+                delay = 0;
+            end
+        else
+            delay = 0;
+        end
+
         % Update robot times (here there are a few extra "- 1" in Agent.queue compared with the code above because we already added the new task to the queue)
         Agent(a).Td_s(last_slot)    = Td_a_t_t(a, t, Agent(a).queue(last_slot - 1 + 1) + 1);
         Agent(a).Tw_s(last_slot)    = waiting_time;
         Agent(a).Te_s(last_slot)    = Te_t_nf(t, Task(t).nf);
-        Agent(a).tfin_s(last_slot + 1)  = Agent(a).tfin_s(last_slot - 1 + 1) + Agent(a).Td_s(last_slot) + Agent(a).Tw_s(last_slot) + Agent(a).Te_s(last_slot);
-        Agent(a).ac_Ft_s(last_slot + 1) = Agent(a).Td_s(last_slot) + Agent(a).Tw_s(last_slot) + Agent(a).Te_s(last_slot);
+        Agent(a).tfin_s(last_slot + 1)  = Agent(a).tfin_s(last_slot - 1 + 1) + delay + Agent(a).Td_s(last_slot) + Agent(a).Tw_s(last_slot) + Agent(a).Te_s(last_slot);
+        Agent(a).ac_Ft_s(last_slot + 1) = delay + Agent(a).Td_s(last_slot) + Agent(a).Tw_s(last_slot) + Agent(a).Te_s(last_slot);
         % If last task was not a recharge, add also the last accumulated flight time
         if Agent(a).queue(last_slot - 1 + 1) ~= R
             Agent(a).ac_Ft_s(last_slot + 1) = Agent(a).ac_Ft_s(last_slot + 1) + Agent(a).ac_Ft_s(last_slot - 1 + 1);
@@ -1367,105 +1582,24 @@ function [Agent, Synchs] = allocateTaskGroup1(Agent, Task, t, selected_robots, p
     
             if a1 ~= a2
                 % Synchronization constraint
-                % Sta1s1a2s2(t - 1, a1, s1, a2, s2) = 1;
-                Synchs = [Synchs, [a1; s1; a2; s2]];
+                if heuristicTaskAllocator_flag || small_scale_tests_flag
+                    Sta1s1a2s2(t - 1, a1, s1, a2, s2) = 1;
+                elseif repair_flag
+                    Synchs = [Synchs, [a1; s1; a2; s2]];
+                end
             end
         end
     end
 end
 
 % Allocate task for group 2
-% function [Agent, Sta1s1a2s2, Rta1s1a2s2] = allocateTaskGroup2(Agent, Task, t, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Sta1s1a2s2, Rta1s1a2s2, tol)
-% function [Agent] = allocateTaskGroup2(Agent, Task, t, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, tol)
-function [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Synchs, Relays, tol)
+% Initializer for sparseXATS or small-scale tests: function [Agent, Sta1s1a2s2, Rta1s1a2s2] = allocateTaskGroup2(Agent, Task, t, v, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Sta1s1a2s2, Rta1s1a2s2, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag)
+% Plan repair: function [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, v, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Synchs, Relays, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag)
+% Other: function [Agent] = allocateTaskGroup2(Agent, Task, t, v, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag)
+function [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, v, selected_robots, task_plan, pre_recharge, plan_finish_time, na, Td_a_t_t, Te_t_nf, R, Synchs, Relays, tol, heuristicTaskAllocator_flag, small_scale_tests_flag, repair_flag)
     % Initialize variable to note slots used for task's plan (used to create relays and synchronizations constraints)
-    slot_map = zeros(size(task_plan));
-
-    % Compute the slot_map (used to create relays and synchronizations constraints)
-    for robot = 1:size(task_plan,1)
-        % Get robot's id
-        a = selected_robots(robot);
-    
-        % Get last used slot
-        last_slot = length(Agent(a).queue) - 1;
-    
-        % Adjust initial slot with pre-recharge information
-        last_slot = last_slot + pre_recharge(robot);
-    
-        % Fill the slot map with the corresponding slots
-        for fragment = 1:Task(t).nf
-            % Check if there is a t or R task assigned to this robot and fragment
-            if task_plan(robot, fragment) ~= 0
-                % Adjust last slot for this task
-                last_slot = last_slot + 1;
-    
-                % Update slot information
-                slot_map(robot, fragment) = last_slot;
-            end
-        end
-    end
-
-    % Create relays and synchronizations constraints
-    for fragment = 1:Task(t).nf
-        % Synchronization constraints
-        % Select a robot from fragment column
-        for r1 = 1:size(task_plan,1)
-            % Check if there is a t task assigned to this robot and fragment
-            if task_plan(r1, fragment) == t
-                % Get robot's id
-                a1 = selected_robots(r1);
-    
-                % Get fragment's slot
-                s1 = slot_map(r1, fragment);
-    
-                % Select another robot from fragment column
-                for r2 = 1:size(task_plan,1)
-                    % Check if there is a t task assigned to this robot and fragment
-                    if task_plan(r2, fragment) == t
-                        % Get robot's id
-                        a2 = selected_robots(r2);
-    
-                        % Get fragment's slot
-                        s2 = slot_map(r2, fragment);
-    
-                        % Check if selected robots are the same
-                        if a1 ~= a2
-                            % Set synchronization constraint
-                            % Sta1s1a2s2(t - 1, a1, s1, a2, s2) = 1;
-                            Synchs = [Synchs, [a1; s1; a2; s2]];
-                        end
-                    end
-                end
-            end
-        end
-    
-        % Relays constraints
-        % Check if this is the last fragment
-        if fragment ~= Task(t).nf
-            % Find positions of t tasks in fragment column
-            robot_idx = find(ismember([task_plan(:,fragment)], t));
-    
-            % Find positions of t tasks in next fragment column
-            next_robot_idx = find(ismember([task_plan(:,fragment + 1)], t));
-    
-            for robot = 1:na(t)
-                % Get robot's indexes
-                r1 =      robot_idx(robot);
-                r2 = next_robot_idx(robot);
-    
-                % Get robot's ids
-                a1 = selected_robots(r1);
-                a2 = selected_robots(r2);
-    
-                % Get fragment's slots
-                s1 = slot_map(r1, fragment);
-                s2 = slot_map(r2, fragment + 1);
-    
-                % Set relay constraints
-                % Rta1s1a2s2(t - 1, a1, s1, a2, s2) = 1;
-                Relays = [Relays, [a1; s1; a2; s2]];
-            end
-        end
+    if heuristicTaskAllocator_flag || small_scale_tests_flag || repair_flag
+        slot_map = zeros(size(task_plan));
     end
 
     % Assign the task's plan to the compatible robots
@@ -1487,7 +1621,7 @@ function [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, selected_r
                 pre_recharge(robot) = 1;
             elseif task_plan(robot, fragment) ~= 0
                 % Compute the waiting time for robot a
-                waiting_time = getWaitingTime(a, task_plan(robot, fragment), last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge(robot), coalition_finishing_time, tol);
+                waiting_time = getWaitingTime(a, task_plan(robot, fragment), v, last_slot, Agent, Task, Td_a_t_t, Te_t_nf, R, pre_recharge(robot), coalition_finishing_time, tol);
 
                 % Check if robot needs a previous recharge
                 if pre_recharge(robot)
@@ -1503,10 +1637,21 @@ function [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, selected_r
                     % Update coordination point
                     Agent = updateCoordinationPoint(Agent, Task, a, R, 2, last_slot, na, R);
 
+                    % Check if there is a delay in this slot
+                    if v == 13
+                        try
+                            delay = Agent(a).delay_s(last_slot);
+                        catch
+                            delay = 0;
+                        end
+                    else
+                        delay = 0;
+                    end
+
                     % Update robot times (here there are a few extra "- 1" in Agent.queue compared with the code above because we already added the recharge task to the queue)
                     Agent(a).Td_s(last_slot)    = Td_a_t_t(a, R, Agent(a).queue(last_slot - 1 + 1) + 1);
                     Agent(a).Te_s(last_slot)    = Te_t_nf(R, Task(R).nf);
-                    Agent(a).tfin_s(last_slot + 1)  = Agent(a).tfin_s(last_slot - 1 + 1) + Agent(a).Td_s(last_slot) + Agent(a).Te_s(last_slot);
+                    Agent(a).tfin_s(last_slot + 1)  = Agent(a).tfin_s(last_slot - 1 + 1) + delay + Agent(a).Td_s(last_slot) + Agent(a).Te_s(last_slot);
                     Agent(a).ac_Ft_s(last_slot + 1) = Agent(a).Td_s(last_slot);
                     % If last task was not a recharge, add also the last accumulated flight time
                     if Agent(a).queue(last_slot - 1 + 1) ~= R
@@ -1531,18 +1676,29 @@ function [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, selected_r
                     waiting_time = 0;
 
                     % Update tfin and acFt from slot coordination_point(a) to last_slot
-                    Agent = updateTfinAcFt(Agent, a, last_slot, R);
+                    Agent = updateTfinAcFt(Agent, a, v, last_slot, R);
                 end
 
                 % Update coordination point
                 Agent = updateCoordinationPoint(Agent, Task, a, t, 2, last_slot, na, R);
 
+                % Check if there is a delay in this slot
+                if v == 13
+                    try
+                        delay = Agent(a).delay_s(last_slot);
+                    catch
+                        delay = 0;
+                    end
+                else
+                    delay = 0;
+                end
+
                 % Update robot times (here there are a few extra "- 1" in Agent.queue compared with the code above because we already added the new task to the queue)
                 Agent(a).Td_s(last_slot)    = Td_a_t_t(a, task_plan(robot, fragment), Agent(a).queue(last_slot - 1 + 1) + 1);
                 Agent(a).Tw_s(last_slot)    = waiting_time;
                 Agent(a).Te_s(last_slot)    = Te_t_nf(task_plan(robot, fragment), Task(task_plan(robot, fragment)).nf);
-                Agent(a).tfin_s(last_slot + 1)  = Agent(a).tfin_s(last_slot - 1 + 1) + Agent(a).Td_s(last_slot) + Agent(a).Tw_s(last_slot) + Agent(a).Te_s(last_slot);
-                Agent(a).ac_Ft_s(last_slot + 1) = Agent(a).Td_s(last_slot) + Agent(a).Tw_s(last_slot) + Agent(a).Te_s(last_slot);
+                Agent(a).tfin_s(last_slot + 1)  = Agent(a).tfin_s(last_slot - 1 + 1) + delay + Agent(a).Td_s(last_slot) + Agent(a).Tw_s(last_slot) + Agent(a).Te_s(last_slot);
+                Agent(a).ac_Ft_s(last_slot + 1) = delay + Agent(a).Td_s(last_slot) + Agent(a).Tw_s(last_slot) + Agent(a).Te_s(last_slot);
                 % If last task was not a recharge, add also the last accumulated flight time
                 if Agent(a).queue(last_slot - 1 + 1) ~= R
                     Agent(a).ac_Ft_s(last_slot + 1) = Agent(a).ac_Ft_s(last_slot + 1) + Agent(a).ac_Ft_s(last_slot - 1 + 1);
@@ -1551,10 +1707,86 @@ function [Agent, Synchs, Relays] = allocateTaskGroup2(Agent, Task, t, selected_r
                 if Agent(a).ac_Ft_s(last_slot + 1) > Agent(a).Ft - Agent(a).Ft_saf
                     error(['Fail while allocating task ', num2str(t - 1),'. Insufficient flight time. This scenario can''t be solved or this algorithm can''t find a valid solution']);
                 end
+
+                % Add the fragment to the slot_map (used to create relays and synchronizations constraints)
+                if heuristicTaskAllocator_flag || small_scale_tests_flag || repair_flag
+                    slot_map(robot, fragment) = last_slot;
+                end
             end
 
             % Compute the finish time for the next fragment
             coalition_finishing_time = coalition_finishing_time + Te_t_nf(t, Task(t).nf);
+        end
+    end
+
+    if heuristicTaskAllocator_flag || small_scale_tests_flag || repair_flag
+        % Create relays and synchronizations constraints
+        for fragment = 1:Task(t).nf
+            % Synchronization constraints
+            % Select a robot from fragment column
+            for r1 = 1:size(task_plan,1)
+                % Check if there is a t task assigned to this robot and fragment
+                if task_plan(r1, fragment) == t
+                    % Get robot's id
+                    a1 = selected_robots(r1);
+        
+                    % Get fragment's slot
+                    s1 = slot_map(r1, fragment);
+        
+                    % Select another robot from fragment column
+                    for r2 = 1:size(task_plan,1)
+                        % Check if there is a t task assigned to this robot and fragment
+                        if task_plan(r2, fragment) == t
+                            % Get robot's id
+                            a2 = selected_robots(r2);
+        
+                            % Get fragment's slot
+                            s2 = slot_map(r2, fragment);
+        
+                            % Check if selected robots are the same
+                            if a1 ~= a2
+                                % Set synchronization constraint
+                                if heuristicTaskAllocator_flag || small_scale_tests_flag
+                                    Sta1s1a2s2(t - 1, a1, s1, a2, s2) = 1;
+                                elseif repair_flag
+                                    Synchs = [Synchs, [a1; s1; a2; s2]];
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        
+            % Relays constraints
+            % Check if this is the last fragment
+            if fragment ~= Task(t).nf
+                % Find positions of t tasks in fragment column
+                robot_idx = find(ismember([task_plan(:,fragment)], t));
+        
+                % Find positions of t tasks in next fragment column
+                next_robot_idx = find(ismember([task_plan(:,fragment + 1)], t));
+        
+                for robot = 1:na(t)
+                    % Get robot's indexes
+                    r1 =      robot_idx(robot);
+                    r2 = next_robot_idx(robot);
+        
+                    % Get robot's ids
+                    a1 = selected_robots(r1);
+                    a2 = selected_robots(r2);
+        
+                    % Get fragment's slots
+                    s1 = slot_map(r1, fragment);
+                    s2 = slot_map(r2, fragment + 1);
+        
+                    % Set relay constraints
+                    if heuristicTaskAllocator_flag || small_scale_tests_flag
+                        Rta1s1a2s2(t - 1, a1, s1, a2, s2) = 1;
+                    elseif repair_flag
+                        Relays = [Relays, [a1; s1; a2; s2]];
+                    end
+                end
+            end
         end
     end
 end

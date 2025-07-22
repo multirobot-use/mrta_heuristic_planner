@@ -1,4 +1,4 @@
-function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
+function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay, print_middle_step)
     % Inputs:
         % Agent:  Robot structure array
         % Task:   Task structure array
@@ -9,13 +9,22 @@ function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
     result = true;
 
     % Check if the number of inputs is correct
-    if nargin ~= 5
+    if nargin < 5
         error('Not enough input arguments');
+    end
+
+    if nargin < 6
+        print_middle_step = false;
     end
 
     % Check if the delay input is correct
     if length(delay) ~= 3
         error('Delay input is incorrect');
+    else
+        % Separate the delay into its components
+        delayed_time = delay(1);
+        delayed_robot = delay(2);
+        delayed_slot = delay(3);
     end
 
     % Check if the scenario is solved by the heuristic
@@ -33,38 +42,273 @@ function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
     constant_scenario_values = struct('A', A, 'S', S, 'R', R);
 
     % Determine which tasks has already been executed and move their waiting time information to an auxiliary variable
-    % Find out the finish time of the task that got delayed
-    delayed_task_finish_time = Agent(delay(2)).tfin_s(delay(3) + 1) + delay(1);
+    % Find out the finish time of the task that got delayed, i.e. the current execution time
+    delayed_task_finish_time = Agent(delayed_robot).tfin_s(delayed_slot + 1) + delayed_time;
 
-    % Fill an auxiliary variable with the waiting times of the tasks that have already been executed
-    for a = 1:A
-        % Create the auxiliary variable to store the already executed waiting times
-        Agent(a).exTw_s = zeros(1,S);
-        
-        % Copy the already executed waiting times into exTw_s
-        for s = 1:S
-            % Case 1: The task has already been executed
-            if Agent(a).tfin_s(s + 1) <= delayed_task_finish_time
-                Agent(a).exTw_s(s) = Agent(a).Tw_s(s);
-            % Case 2: The task hasn't started yet
-            elseif Agent(a).tfin_s((s - 1) + 1) + Agent(a).Td_s(s) >= delayed_task_finish_time
-                break;
-            % Case 3: The task is being executed, the waiting time has already been applied
-            elseif Agent(a).tfin_s((s - 1) + 1) + Agent(a).Td_s(s) + Agent(a).Tw_s(s) <= delayed_task_finish_time
-                Agent(a).exTw_s(s) = Agent(a).Tw_s(s);
-            % Case 4: The task is being executed, the waiting time was not (totally) executed
-            else
-                Agent(a).exTw_s(s) = delayed_task_finish_time - Agent(a).tfin_s((s - 1) + 1) - Agent(a).Td_s(s);
+    % Initialize the delayed slots list
+    delayed_slots = [delayed_robot; delayed_slot];
+
+    % Find any other slot affected by delayed slots
+    new_delayed_slots = true;
+    while new_delayed_slots
+        % Initialize the flags
+        delayed_amount = width(delayed_slots);
+        new_delayed_slots = false;
+
+        % Check for every slot currently in the list
+        for slot = 1:width(delayed_slots)
+            % Find any slot coordinated with the delayed slots
+            delayed_slots = [delayed_slots, Synchs(1:2, all(Synchs(3:4,:) == delayed_slots(:,slot)))];
+            delayed_slots = [delayed_slots, Synchs(3:4, all(Synchs(1:2,:) == delayed_slots(:,slot)))];
+            delayed_slots = [delayed_slots, Relays(1:2, all(Relays(3:4,:) == delayed_slots(:,slot)))];
+            delayed_slots = [delayed_slots, Relays(3:4, all(Relays(1:2,:) == delayed_slots(:,slot)))];
+        end
+
+        % Remove duplicates from the list
+        delayed_slots = unique(delayed_slots', 'rows')';
+
+        % Add to the list every slot that is behind the delayed slots
+        for slot = 1:width(delayed_slots)
+            % Loop until the end of this robots queue
+            for s = delayed_slots(2, slot) + 1:length(Agent(delayed_slots(1, slot)).queue) - 1
+                delayed_slots = [delayed_slots, [delayed_slots(1, slot); s]];
             end
         end
 
-        % Set the waiting times back to 0
-        Agent(a).Tw_s = zeros(1,S);
+        % Remove duplicates from the list
+        delayed_slots = unique(delayed_slots', 'rows')';
+
+        % Check if there are any new slots in the list
+        if width(delayed_slots) ~= delayed_amount
+            new_delayed_slots = true;
+        end
     end
 
-    % Add the delay time to the auxiliary variable
-    Agent(delay(2)).exTw_s(delay(3)) = Agent(delay(2)).exTw_s(delay(3)) + delay(1);
+    % Initialize the executed flag and the delayed time variable for each slot
+    for a = 1:A
+        Agent(a).executed_flag_s = false(1, length(Agent(a).queue) - 1);
+        Agent(a).delay_s = zeros(1,length(Agent(a).queue) - 1);
 
+        % Step 1 of the delay_s algorithm. 
+        % Set the delayed time for the first delayed slot of this robot if any.
+        % Note: Initially, we will only set the delay to "delayed_time" for the first delayed slot of each agent if any. This keeps the plan coordinated for now (ignoring battery constraints). Doing this we can correctly set the executed flag value for all slots.
+        % Once we have the value for the executed flags, we can assign the correct value of delay_s for all slots.
+        % This algorithm works for every possible combination of executed (finished and in progress) and not executed (failed or not started) slots (all the details in One Note TODO: place here the link to the full explanation in the final thesis).
+        if any(delayed_slots(1,:) == a)
+            % Get the first delayed slot in this agent.
+            s = min(delayed_slots(2, delayed_slots(1,:) == a));
+
+            % Note: any coordinated slot affected by the delay, to keep being coordinated, must be delayed exactly a "delayed_time" amount of time (one delayed slot in total per robot, i.e. its first delayed slot).
+            % To compute the executed_flag, we need to set initially delay_s = delayed_time. This value will be change later.
+            Agent(a).delay_s(s) = delayed_time;
+        end
+    end
+
+    % Re-compute the accumulated flight time and finish time to get which slots are executed and which are not.
+    Agent = updateTfin(Agent, constant_scenario_values);
+    Agent = updateAcFts(Agent, constant_scenario_values);
+
+    % Create a list to save the slots whose executed flags are already set (add an initial slot to give dimensions to the matrix)
+    processed_slots = [0; 0];
+
+    % Step 2 of the delay_s algorithm: identify executed and not executed slots
+    % Set the executed flags for executed slots and slots that are in progress and have battery enough to finish
+    % The executed flag indicates that a slot's waiting time can not be modified.
+    for a = 1:A
+        for s = 1:length(Agent(a).queue) - 1
+            % Check if this slot is not in the processed slots list
+            if ~any(all(processed_slots == [a; s]))
+                % Note: this was originally thought for delayed relayed slots (allocated using a matrix pattern), but later was reused and now the same code applies for any kind of slots.
+                % Create a list with all the coordinated slots
+                coordinated_slots = [a; s];
+                new_coordinated_slots = true;
+                while new_coordinated_slots
+                    % Initialize the flags
+                    coordinated_amount = width(coordinated_slots);
+                    new_coordinated_slots = false;
+
+                    % Check for every slot currently in the list
+                    for slot = 1:width(coordinated_slots)
+                        % Find any slot coordinated with the delayed slots
+                        coordinated_slots = [coordinated_slots, Synchs(1:2, all(Synchs(3:4,:) == coordinated_slots(:,slot)))];
+                        coordinated_slots = [coordinated_slots, Synchs(3:4, all(Synchs(1:2,:) == coordinated_slots(:,slot)))];
+                        coordinated_slots = [coordinated_slots, Relays(1:2, all(Relays(3:4,:) == coordinated_slots(:,slot)))];
+                        coordinated_slots = [coordinated_slots, Relays(3:4, all(Relays(1:2,:) == coordinated_slots(:,slot)))];
+                    end
+
+                    % Remove duplicates from the list
+                    coordinated_slots = unique(coordinated_slots', 'rows')';
+
+                    % Check if there are any new slots in the list
+                    if width(coordinated_slots) ~= coordinated_amount
+                        new_coordinated_slots = true;
+                    end
+                end
+                                
+                % Aux vars to get the init and finish time of the coordinated slots
+                coordinated_init_time = inf;
+                coordinated_finish_time = 0;
+
+                % Get the join init and finish time of the robot coalition
+                for i = 1:width(coordinated_slots)
+                    robot = coordinated_slots(1, i);
+                    slot = coordinated_slots(2, i);
+
+                    % Compare the init time
+                    if coordinated_init_time > Agent(robot).tfin_s((slot - 1) + 1)
+                        coordinated_init_time = Agent(robot).tfin_s((slot - 1) + 1);
+                    end
+
+                    % Compare the finish time
+                    if coordinated_finish_time < Agent(robot).tfin_s(slot + 1)
+                        coordinated_finish_time = Agent(robot).tfin_s(slot + 1);
+                    end
+                end
+
+                % Init the battery constraint flag
+                battery_flag = true;
+
+                % Get the list of robots involved in this coordination
+                involved_robots = unique(coordinated_slots(1, :));
+
+                % Check if the battery fails at any time of those robots up to the coordinated slot
+                for i = 1:length(involved_robots)
+                    robot = involved_robots(i);
+
+                    % Iterate from the first slot of each involved robot to its last slot belonging to the coordinated slots list
+                    for slot = 1:max(coordinated_slots(2, coordinated_slots(1,:) == robot))
+                        % Check if the battery constraint is not met for this slot. Only delayed slots need its battery checked
+                        if any(all(delayed_slots == [a; s])) && Agent(robot).ac_Ft_s(slot + 1) > Agent(robot).Ft - Agent(robot).Ft_saf
+                            battery_flag = false;
+
+                            % Add this slot and the ones behind to the processed slots list. They need to be re-allocated.
+                            for aux_s = slot:length(Agent(robot).queue) - 1
+                                processed_slots = [processed_slots, [robot; aux_s]];
+                            end
+
+                            % Move to the next involved robot
+                            break;
+                        end
+                    end
+                end
+
+                if battery_flag
+                    % Check if the coordinated slots are in execution or have been executed
+                    if coordinated_init_time < delayed_task_finish_time
+                        % Set all slots from the coordinated slots list to executed
+                        for slot = 1:width(coordinated_slots)
+                            Agent(coordinated_slots(1, slot)).executed_flag_s(coordinated_slots(2, slot)) = true;
+                        end
+                    end
+                end
+
+                % Add all coordinated slots to the processed slots list
+                for slot = 1:width(coordinated_slots)
+                    processed_slots = [processed_slots, [coordinated_slots(1, slot); coordinated_slots(2, slot)]];
+                end
+            end
+        end
+    end
+
+    % Step 3 of the delay_s algorithm: loop through every queue to reorganize them and set the final delay_s value.
+    for a = 1:A
+        % Initialize the auxiliary slot counter, i.e. s'
+        sp = 1;
+
+        % This part will take approx S steps, more precisely, one step per slot in this queue
+        for s = 1:length(Agent(a).queue) - 1
+            % Check if the s' slot is executed
+            if Agent(a).executed_flag_s(sp)
+                % Compute the delay in s' as Tfin_{s'} - Te_{s'} - Tw_{s'} - Td_{s'} - Tfin_{s'-1}
+                Agent(a).delay_s(sp) = Agent(a).tfin_s(sp + 1) - Agent(a).Te_s(sp) - Agent(a).Tw_s(sp) - Agent(a).Td_s(sp) - Agent(a).tfin_s((sp - 1) + 1);
+
+                % Increase s'
+                sp = sp + 1;
+            else
+                % If this is a recharge task followed by an also executed task, set it also as executed and not move it.
+                pre_relay_recharge_flag = false;
+                if Agent(a).queue(sp + 1) == R
+                    % Check if there is any executed task after this slot
+                    for sp_aux = sp + 1:length(Agent(a).queue) - 1
+                        if Agent(a).executed_flag_s(sp_aux)
+                            % Set recharge task also as executed
+                            Agent(a).executed_flag_s(sp) = true;
+
+                            % Compute the delay in s' as Tfin_{s'} - Te_{s'} - Tw_{s'} - Td_{s'} - Tfin_{s'-1}
+                            Agent(a).delay_s(sp) = Agent(a).tfin_s(sp + 1) - Agent(a).Te_s(sp) - Agent(a).Tw_s(sp) - Agent(a).Td_s(sp) - Agent(a).tfin_s((sp - 1) + 1);
+
+                            % Increase s'
+                            sp = sp + 1;
+
+                            pre_relay_recharge_flag = true;
+                            break;
+                        end
+                    end
+                end
+
+                % Check if this wasn't a recharge task previous to a relay
+                if ~pre_relay_recharge_flag
+                    % Move the fragment in s' to the end of this queue
+                    [Agent, Synchs, Relays] = moveSToEnd(a, sp, Agent, Synchs, Relays);
+                    % disp(['Moved ', Task(Agent(a).queue(end)).name,' [', num2str(a), ', ', num2str(sp), '] to the end']);
+                end
+            end
+        end
+
+        % Step 4 of the delay_s algorithm: compute the delay in s' as max(0, current execution time - Tfin_{s'-1})
+        Agent(a).delay_s(sp) = max(0, delayed_task_finish_time - Agent(a).tfin_s((sp - 1) + 1));
+
+        % Set to 0 the delay in slots after sp
+        for s = sp + 1:length(Agent(a).queue) - 1
+            Agent(a).delay_s(s) = 0;
+        end
+
+        % Substitute virtual zeros
+        Agent(a).delay_s(abs(Agent(a).delay_s) < tol) = 0;
+    end
+
+    % Print middle step
+    if print_middle_step
+        % Re-compute the accumulated flight time and finish time
+        Agent = updateTfin(Agent, constant_scenario_values);
+        Agent = updateAcFts(Agent, constant_scenario_values);
+
+        % Print the middle step
+        printSolution([], Agent, Task, false, '', 'Delayed Plan');
+        fig = gcf;
+        fig.WindowState = 'maximized';
+
+        return;
+    end
+
+    % Remove all waiting times from the not executed slots
+    for a = 1:A
+        for s = 1:length(Agent(a).queue) - 1
+            % Check if the s' slot is not executed
+            if ~Agent(a).executed_flag_s(s)
+                % Set this slot waiting time to 0
+                Agent(a).Tw_s(s) = 0;
+            end
+        end
+    end
+
+    % Step 5 of the delay_s algorithm: re-compute the accumulated flight time and finish time
+    Agent = updateTfin(Agent, constant_scenario_values);
+    Agent = updateAcFts(Agent, constant_scenario_values);
+
+    % Check if at this point, before repair/replanning, if any robot has failed, i.e., run out of battery.
+    for a = 1:A
+        for s = 1:length(Agent(a).queue) - 1
+            % Check if the accumulated flight time is grater than the total flight time capacity minus de safety time
+            if Agent(a).ac_Ft_s(s + 1) > Agent(a).Ft - Agent(a).Ft_saf
+                result = false;
+                return;
+            end
+        end
+    end
+
+    % Step 6 of the delay_s algorithm: repair the plan (or re-plan if this fails)
+    % Note: in order to repair, we can only change the waiting times of not executed slots, i.e. finish time of executed slots must stay the same.
     %? Tw_a_s
     %* Depends on: t_fin_a_s 
     % Auxiliary copy of S and R to coordinate the slots one by one
@@ -91,6 +335,7 @@ function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
         if not(coordination_remaining_flag)
             last_update_flag = true;
         end
+
         % Compute all variables that depends on Tw_a_s directly or indirectly with Tw_a_s' actual value
         Agent = updateTfin(Agent, constant_scenario_values);
 
@@ -113,9 +358,7 @@ function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
                                                      100 * not(isempty(Relays_copy(:, Relays_copy(3,:) == a & Relays_copy(4,:) == s)));
                 end
                 if coord_type_ind
-                    % Get (a2,s2) to be able to call coordinateTwoSlots for the first time (note: inside coordinateTwoSlots, (a2,s2) is computed again because at the end of the main while loop, (a,s) can change to the old (a2,s2))
-                    [a2, s2] = geta2s2(Agent, a, s, coord_type_ind, Synchs_copy, Relays_copy, constant_scenario_values);
-                    [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, infinite_loop_flag] = coordinateTwoSlots(Agent, a, s, a2, s2, Synchs, Relays, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, tol, constant_scenario_values);
+                    [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, infinite_loop_flag] = coordinateTwoSlots(Agent, a, s, Synchs, Relays, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, tol, constant_scenario_values);
                 end
                 if coord_type_ind
                     break;
@@ -128,24 +371,14 @@ function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
     end
 
     % Update tfin_s and ac_Ft_s values
+    Agent = updateTfin(Agent, constant_scenario_values);
+    Agent = updateAcFts(Agent, constant_scenario_values);
+
+    % Check if the new plan fits the battery constraints
     for a = 1:A
         for s = 1:length(Agent(a).queue) - 1
-            Agent(a).tfin_s(s + 1)  = Agent(a).tfin_s((s - 1) + 1) + Agent(a).Td_s(s) + Agent(a).Tw_s(s) + Agent(a).Te_s(s) + Agent(a).exTw_s(s);
-            % Check if the task is a recharge task
-            if Agent(a).queue(s + 1) == R
-                Agent(a).ac_Ft_s(s + 1) = Agent(a).Td_s(s);
-            else
-                Agent(a).ac_Ft_s(s + 1) = Agent(a).Td_s(s) + Agent(a).Tw_s(s) + Agent(a).Te_s(s);
-            end
-            
-            % If last task was not a recharge, add also the last accumulated flight time
-            if Agent(a).queue((s - 1) + 1) ~= R
-                Agent(a).ac_Ft_s(s + 1) = Agent(a).ac_Ft_s(s + 1) + Agent(a).ac_Ft_s((s - 1) + 1);
-            end
-
-            % Check if there is enough battery to finish the task
             if Agent(a).ac_Ft_s(s + 1) > Agent(a).Ft - Agent(a).Ft_saf
-                disp(['Insufficient battery to finish task ', num2str(Agent(a).queue(s + 1) - 1), ' in slot ', num2str(s), ' agent ', num2str(a)]);
+                % disp(['Insufficient battery to finish task ', Task(Agent(a).queue(s + 1)).name, ' in slot ', num2str(s), ' agent ', num2str(a)]);
                 result = false;
             end
         end
@@ -163,15 +396,82 @@ function [Agent] = updateTfin(Agent, constant_scenario_values)
     for a = 1:A
         % tfin(a,0) = 0
         Agent(a).tfin_s(0 + 1) = 0;
-        for s = 1:S
+        for s = 1:length(Agent(a).queue) - 1
             % tfin_a(s) = tfin(a,s-1) + Td(a,s) + Tw(a,s) + Te(a,s)
-            Agent(a).tfin_s(s + 1) = Agent(a).tfin_s((s - 1) + 1) + Agent(a).Td_s(s) + Agent(a).Tw_s(s) + Agent(a).Te_s(s) + Agent(a).exTw_s(s);
+            Agent(a).tfin_s(s + 1) = Agent(a).tfin_s((s - 1) + 1) + Agent(a).delay_s(s) + Agent(a).Td_s(s) + Agent(a).Tw_s(s) + Agent(a).Te_s(s);
         end
     end
 end
 
+%% Update ac_Ft_s
+function [Agent] = updateAcFts(Agent, constant_scenario_values)
+    A = constant_scenario_values.A;
+    S = constant_scenario_values.S;
+    R = constant_scenario_values.R;
+
+    for a = 1:A
+        for s = 1:length(Agent(a).queue) - 1
+            % Check if the task is a recharge task
+            if Agent(a).queue(s + 1) == R
+                Agent(a).ac_Ft_s(s + 1) = Agent(a).Td_s(s);
+            else
+                Agent(a).ac_Ft_s(s + 1) = Agent(a).delay_s(s) + Agent(a).Td_s(s) + Agent(a).Tw_s(s) + Agent(a).Te_s(s);
+            end
+            
+            % If last task was not a recharge, add also the last accumulated flight time
+            if Agent(a).queue((s - 1) + 1) ~= R
+                Agent(a).ac_Ft_s(s + 1) = Agent(a).ac_Ft_s(s + 1) + Agent(a).ac_Ft_s((s - 1) + 1);
+            end
+        end
+    end
+end
+
+%% Move the fragment in slot sp to the end of the queue
+function [Agent, Synchs, Relays] = moveSToEnd(a, sp, Agent, Synchs, Relays)
+    % Copy sp information to aux variables
+    aux_fragment = Agent(a).queue(sp + 1);
+    aux_Td = Agent(a).Td_s(sp);
+    aux_Tw = Agent(a).Tw_s(sp);
+    aux_Te = Agent(a).Te_s(sp);
+    aux_executed_flag = Agent(a).executed_flag_s(sp);
+
+    % Replace [a; sp] by [a; inf] in Synchs and Relays
+    Synchs(1:2, all(Synchs(1:2, :) == [a; sp])) = repmat([a; inf], 1, sum(all(Synchs(1:2, :) == [a; sp])));
+    Synchs(3:4, all(Synchs(3:4, :) == [a; sp])) = repmat([a; inf], 1, sum(all(Synchs(3:4, :) == [a; sp])));
+    Relays(1:2, all(Relays(1:2, :) == [a; sp])) = repmat([a; inf], 1, sum(all(Relays(1:2, :) == [a; sp])));
+    Relays(3:4, all(Relays(3:4, :) == [a; sp])) = repmat([a; inf], 1, sum(all(Relays(3:4, :) == [a; sp])));
+
+    % Move the information in the slots after sp one slot forward
+    for s = sp:(length(Agent(a).queue) - 1) - 1
+        Agent(a).queue(s + 1)       = Agent(a).queue((s + 1) + 1);
+        Agent(a).Td_s(s)            = Agent(a).Td_s((s + 1));
+        Agent(a).Tw_s(s)            = Agent(a).Tw_s((s + 1));
+        Agent(a).Te_s(s)            = Agent(a).Te_s((s + 1));
+        Agent(a).executed_flag_s(s) = Agent(a).executed_flag_s((s + 1));
+
+        % Replace [a; s + 1] by [a; s] in Synchs and Relays
+        Synchs(1:2, all(Synchs(1:2, :) == [a; s + 1])) = repmat([a; s], 1, sum(all(Synchs(1:2, :) == [a; s + 1])));
+        Synchs(3:4, all(Synchs(3:4, :) == [a; s + 1])) = repmat([a; s], 1, sum(all(Synchs(3:4, :) == [a; s + 1])));
+        Relays(1:2, all(Relays(1:2, :) == [a; s + 1])) = repmat([a; s], 1, sum(all(Relays(1:2, :) == [a; s + 1])));
+        Relays(3:4, all(Relays(3:4, :) == [a; s + 1])) = repmat([a; s], 1, sum(all(Relays(3:4, :) == [a; s + 1])));
+    end
+
+    % Place the information initially in sp at the end of the queue
+    Agent(a).queue((length(Agent(a).queue) - 1) + 1)       = aux_fragment;
+    Agent(a).Td_s((length(Agent(a).queue) - 1))            = aux_Td;
+    Agent(a).Tw_s((length(Agent(a).queue) - 1))            = aux_Tw;
+    Agent(a).Te_s((length(Agent(a).queue) - 1))            = aux_Te;
+    Agent(a).executed_flag_s((length(Agent(a).queue) - 1)) = aux_executed_flag;
+
+    % Replace [a; inf] by [a; length(Agent(a).queue) - 1] in Synchs and Relays
+    Synchs(1:2, all(Synchs(1:2, :) == [a; inf])) = repmat([a; length(Agent(a).queue) - 1], 1, sum(all(Synchs(1:2, :) == [a; inf])));
+    Synchs(3:4, all(Synchs(3:4, :) == [a; inf])) = repmat([a; length(Agent(a).queue) - 1], 1, sum(all(Synchs(3:4, :) == [a; inf])));
+    Relays(1:2, all(Relays(1:2, :) == [a; inf])) = repmat([a; length(Agent(a).queue) - 1], 1, sum(all(Relays(1:2, :) == [a; inf])));
+    Relays(3:4, all(Relays(3:4, :) == [a; inf])) = repmat([a; length(Agent(a).queue) - 1], 1, sum(all(Relays(3:4, :) == [a; inf])));
+end
+
 %% Get (a2,s2)
-function [a2, s2] = geta2s2(Agent, a, s, coord_type_ind, Synchs_copy, Relays_copy, constant_scenario_values)
+function [a2, s2] = geta2s2(a, s, coord_type_ind, Synchs_copy, Relays_copy, constant_scenario_values)
     A = constant_scenario_values.A;
     S = constant_scenario_values.S;
 
@@ -200,7 +500,7 @@ function [a2, s2] = geta2s2(Agent, a, s, coord_type_ind, Synchs_copy, Relays_cop
 end
 
 %% Coordinate two slots
-function [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, infinite_loop_flag] = coordinateTwoSlots(Agent, a, s, a2, s2, Synchs, Relays, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, tol, constant_scenario_values)
+function [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, infinite_loop_flag] = coordinateTwoSlots(Agent, a, s, Synchs, Relays, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, tol, constant_scenario_values)
     A = constant_scenario_values.A;
     S = constant_scenario_values.S;
     R = constant_scenario_values.R;
@@ -222,7 +522,7 @@ function [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinate
         end
         
         % Find out the (a2, s2) that (a,s) must be coordinated with
-        [a2, s2] = geta2s2(Agent, a, s, coord_type_ind, Synchs_copy, Relays_copy, constant_scenario_values);
+        [a2, s2] = geta2s2(a, s, coord_type_ind, Synchs_copy, Relays_copy, constant_scenario_values);
         
         % Find the first slot to be coordinated in a2 to check if there is a previous slot to be coordinated in a2.
         if a == a2
@@ -317,7 +617,7 @@ function [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinate
                 end
 
                 % Update waiting time
-                if flag_any_recharge && not(flag_any_coordination)
+                if flag_any_recharge && not(flag_any_coordination) && ~Agent(aw).executed_flag_s(sr)
                     Agent(aw).Tw_s(sr) = Agent(aw).Tw_s(sr) + Tw;
                 else
                     Agent(aw).Tw_s(sw) = Agent(aw).Tw_s(sw) + Tw;
@@ -461,7 +761,7 @@ function [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinate
 
         Agent = updateTfin(Agent, constant_scenario_values);
 
-        [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, infinite_loop_flag] = coordinateTwoSlots(Agent, aw, sw, ab, sb, Synchs, Relays, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, tol, constant_scenario_values);
+        [Agent, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, infinite_loop_flag] = coordinateTwoSlots(Agent, aw, sw, Synchs, Relays, Synchs_copy, Relays_copy, Synchs_coordinated, Relays_coordinated, tol, constant_scenario_values);
 
         Agent = updateTfin(Agent, constant_scenario_values);
     end

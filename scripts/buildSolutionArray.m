@@ -145,7 +145,7 @@ function [dv, fval, result] = buildSolutionArray(handmade_solution, Agent, Task,
         % Extract Td_a_s from Agent.Td_s
         Td = zeros(A,S);
         for a = 1:A
-            for s = 1:S
+            for s = 1:length(Agent(a).queue) - 1
                 Td(a,s) = Agent(a).Td_s(s);
             end
         end
@@ -154,7 +154,7 @@ function [dv, fval, result] = buildSolutionArray(handmade_solution, Agent, Task,
         % Extract Tw_a_s from Agent.Tw_s
         Tw = zeros(A,S);
         for a = 1:A
-            for s = 1:S
+            for s = 1:length(Agent(a).queue) - 1
                 Tw(a,s) = Agent(a).Tw_s(s);
             end
         end
@@ -163,7 +163,7 @@ function [dv, fval, result] = buildSolutionArray(handmade_solution, Agent, Task,
         % Extract Te_a_s from Agent.Te_s
         Te = zeros(A,S);
         for a = 1:A
-            for s = 1:S
+            for s = 1:length(Agent(a).queue) - 1
                 Te(a,s) = Agent(a).Te_s(s);
             end
         end

@@ -63,7 +63,7 @@ function [sol, fval, population, scores] = optimalTaskAllocator(scenario_id, exe
     if nargin < 6 || isempty(config_flags)
         % Use default values
         solve_flag                             = true;
-        initialize_flag                        = true;
+        initialize_flag                        = false;
         genetic_algorithm_solver               = false;
         print_solution_flag                    = false;
         display_flag                           = false;
@@ -428,6 +428,7 @@ function [sol, fval, population, scores] = optimalTaskAllocator(scenario_id, exe
     if not(test_flag)
         pool = gcp;
         if isempty(pool)
+            parpool('IdleTimeout', Inf);
             error('No parallel pool found. Automatic pool start may be disabled.');
         end
 
@@ -2146,7 +2147,7 @@ function [sol, fval, population, scores] = optimalTaskAllocator(scenario_id, exe
             options = optimoptions('intlinprog', 'Display', 'off', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
         case 5
             % Save all found integer solutions, with iter
-            options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', 1*24*60*60, 'MaxNodes', inf, 'OutputFcn', @savemilpsolutions);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
+            options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', inf, 'MaxNodes', inf, 'OutputFcn', @savemilpsolutions);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);
         otherwise
             % No output function
             options = optimoptions('intlinprog', 'Display', 'iter', 'MaxTime', inf, 'MaxNodes', inf);%, 'BranchRule', 'maxfun', 'CutGeneration', 'advanced', 'Heuristics', 'advanced' 'RelativeGapTolerance', 0, 'AbsoluteGapTolerance', 0, 'ConstraintTolerance', 1e-9, 'IntegerTolerance', 1e-6, 'LPOptimalityTolerance', 1e-10);

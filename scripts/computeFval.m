@@ -22,6 +22,16 @@ function [fval] = computeFval(Agent, Task, objective_function)
     % Get scenario information
     [Agent, Task, A, T, S, ~, R, Td_a_t_t, Te_t_nf, ~] = getConstantScenarioValues(Agent, Task);
 
+    % Check if this plan was delayed
+    if isfield(Agent, 'delay_s')
+        for a = 1:A
+            for s = 1:length(Agent(a).queue) - 1
+                % Add the delay to the waiting time
+                    Agent(a).Tw_s(s) = Agent(a).Tw_s(s) + Agent(a).delay_s(s);
+            end
+        end
+    end
+
     % z is normalized by scaling its value between the theoretical maximum and minimum value for the total execution time.
     % The minimum value is not 0, but for simplicity, it will be considered as 0.
     % The maximum value can be computed as the sum of all tasks assigned to the slowest agent with a recharge task between them. 
@@ -71,7 +81,7 @@ function [fval] = computeFval(Agent, Task, objective_function)
     % Extract tfin_a_s from Agent.tfin
     tfin_a_s = zeros(A, S+1);
     for a = 1:A
-        for s = 1:S
+        for s = 1:length(Agent(a).queue) - 1
             tfin_a_s(a, s + 1) = Agent(a).tfin_s(s + 1);
         end
     end

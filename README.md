@@ -1,6 +1,3 @@
-## Multi-Robot Task Allocation (MRTA) for heterogeneous teams
-
-This repository addresses a MRTA problem for heterogeneous teams. All code is written in Matlab and it includes: 1) a MILP (Mixed-Integer Linear Program) formulation of the problem, so it can be solved optimally using of-the-shelf solvers such as Gurobi; 2) a heuristic planer to compute efficiently approximate solutions; and 3) an algorithm to repair plans during mission execution in dynamic scenarios where robots may get delayed due to unexpected events. 
 
 For a complete description of the problem and the algorithms, you can read our related publications: 
 
@@ -21,9 +18,8 @@ For a complete description of the problem and the algorithms, you can read our r
 There are no special requirements to be able to run the Matlab scripts.
 Just make sure you have correctly added this project's path to the matlab path, including subfolders:
 
-```matlab
+```
 addpath(genpath('<install_dir>/task_planner'))
-savepath
 ```
 
 You may also want to install [Gurobi](https://www.gurobi.com/) for Matlab to use it as MILP solver.
@@ -33,13 +29,14 @@ You may also want to install [Gurobi](https://www.gurobi.com/) for Matlab to use
 The three main source codes are:
 
 - [optimalTaskAllocator](src/optimalTaskAllocator.m): this script contains the complete MILP formulation. It receives a scenario encoded into two data structures, i.e., robots and tasks, and it returns the MILP solution array and its objective function value.
-- [heuristicTaskAllocator](src/heuristicTaskAllocator.m): this script contains several heuristic algorithms that can solve our MRTA problem, including the main heuristic version (number 9), a greedy version (number 12), a random version (number 6) and a pseudo-random version (number 4). It receives the scenario to be solved encoded into two data structures, and it returns the solution in the same data structures. It also returns information needed to repair the plan in case of robot dealays.
+- [heuristicTaskAllocator](src/heuristicTaskAllocator.m): this script contains several heuristic algorithms that can solve our MRTA problem, including the main heuristic version (number 9), a greedy version (number 12), a random version (number 6) and a pseudo-random version (number 4). It receives the scenario to be solved encoded into two data structures, and it returns the solution in the same data structures. It also returns information needed to repair the plan in case of robot delays.
 - [planRepair](src/planRepair.m): this script contains the plan repair algorithm to fix plans in case of robot delays if possible. It receives a plan solution contained in Robots and Tasks data structures, the synchronization and relays information, and the details about the amount and the location of the delay, and it returns the plan, fixed or not, using the same data structures as in the input, and a variable indicating whether the plan was repaired or not.
 
 Other useful scripts are:
 
 - [printSolution](scripts/printSolution.m): this script can be used to print scenario solutions solved with `optimalTaskAllocator`, `heuristicTaskAllocator` or `planRepair`. It uses a color code to represent displacement, waiting, and execution times (blue, yellow, and green, respectively). Consecutive fragments of the same task in the same robot can be joined into a single bar or not using an input flag.
-- [generateScenarios](scripts/generateScenarios.m): this script can be used to create a dataset of scenarios. Through the input variables, you can specify the amount of scenarios to generate, the number of robots they must contain, the number of tasks per scenario, the amount of different types of robots, and if the scenarios should be discretized or not.
+- [generateScenarios](scripts/generateScenarios.m): this script can be used to create a dataset of scenarios. Through the input variables you can specify the amount of scenarios to generate, the number of robots they must contain, the number of tasks per scenario, the amount of different types of robots, and if the scenarios should be discretized or not.
+- [generatePlanRepairScenarios](scripts/generatePlanRepairScenarios.m): this script can be used to create a dataset of scenarios for testing the plan repair algorithm when the plan has been delayed. Through the input variables you can specify the amount of scenarios to generate, the number of robots they must contain, the number of tasks per scenario, and the durations for the delays.
 - [previewScenario](scripts/previewScenario.m): this script displays the input scenario using bars so you can visualize all relevant information regarding robots and tasks.
 - [scenario](scripts/scenario.m): this script can be used to load a hand-made scenario, to load a randomly generated scenario using its ID, or to randomly generate a single scenario with some specific constraints.
 
@@ -49,7 +46,7 @@ Other useful scripts are:
 
 `optimalTaskAllocator` contains a function defined as:
 
-```matlab
+```
 function [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, scenario_size, objective_function, formulation_variants_flags, config_flags, solver_config)
 ```
 
@@ -67,13 +64,13 @@ Last, the `config_flags` parameter is a 1x9 logic vector corresponding to the fo
 
 We can run the planner to solve a randomly generated scenario with `3` robots, `2` tasks and `1` different type of robot like:
 
-```matlab
+```
 [sol, fval] = optimalTaskAllocator(0, 'random', [3 2 1]);
 ```
 
 By default, the print solution flag is set to false. To change that, we need to specify it in the last parameter:
 
-```matlab
+```
 [sol, fval] = optimalTaskAllocator(0, 'random', [3 2 1], [], [], [1 1 0 0 0 0 0]);
 ```
 
@@ -85,7 +82,7 @@ Note that the bar for each task is divided into two parts. The upper part repres
 
 To solve a pre-generated scenario (for example scenario `3r2t1`), and to do so with a different objective function and with a variant of the formulation, we can run it like this:
 
-```matlab
+```
 [sol, fval] = optimalTaskAllocator('3r2t1', 'Test', [], 4, [1 0 0 0], []);
 ```
 
@@ -93,7 +90,7 @@ Here, we are running the planner with the fourth predefined objective function a
 
 Last, we can use the `genetic_algorithm_solver` configuration parameter to solve the MILP problem using [Matlab's GA solver](https://es.mathworks.com/help/gads/ga.html) from the Optimization Toolbox.
 
-```matlab
+```
 config_flags = [1, 0, 1, 1, 1, 0, 0, 0, 0];
 [sol, fval] = optimalTaskAllocator(scenario_id, execution_id, [], objective_function, [], config_flags, 0);
 ```
@@ -110,7 +107,7 @@ After running the `optimalTaskAllocator()` function, we can check the values of 
 
 **Note**: if it was a randomly generated scenario, remember setting the save flag on when calling the main function.
 
-```matlab
+```
 [Agent, Task] = scenario(scenario_id);
 ```
 
@@ -120,7 +117,7 @@ Now, the `Agent` and `Task` structures with the scenario information are loaded.
 
 With this information and the solution vector returned by `optimalTaskAllocator()`, we can call `getVarValue()` to check the value of any decision variable that we want. To check for example how many fragments are tasks being divided into:
 
-```matlab
+```
 nf_t = getVarValue(sol, Agent, Task, 'nf_t')
 ```
 
@@ -130,7 +127,7 @@ The names of the variables can be consulted in the [getVarValue](scripts/getVarV
 
 In case that we forgot to print the solution, we can also print it manually after loading the planner workspace information by doing:
 
-```matlab
+```
 printSolution(sol, Agent, Task, 0, 'scenario_id', 'execution_id', fval);
 ```
 
@@ -140,7 +137,7 @@ The heuristic planner creates, if feasible, a solution to the specified scenario
 
 To use the heuristic solution as initial solution for the MILP formulation this function shall be defined as:
 
-```matlab
+```
 function [Agent, Task, allocation_order, S_R] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
 ```
 
@@ -148,13 +145,13 @@ function [Agent, Task, allocation_order, S_R] = heuristicTaskAllocator(arg_1, ar
 
 If you think you may need to call the plan repair function (e.g., in a real live execution), we need extra information from this function, so it shall be defined as:
 
-```matlab
+```
 function [Agent, Task, Synchs, Relays] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
 ```
 
 Last, the simplest and fastest heuristic planner execution is achieved by defining it as:
 
-```matlab
+```
 function [Agent, Task, allocation_order] = heuristicTaskAllocator(arg_1, arg_2, reward_coefficients, version, seed)
 ```
 
@@ -169,9 +166,8 @@ The next image shows an example of the heuristic process of building a solution 
 
 When a plan is no longer valid during execution due to a robot delay, we can use the plan repair function to try to fix the plan in order to avoid repeating the whole planning process. This function is defined as:
 
-```matlab
+```
 function [Agent, Task, result] = planRepair(Agent, Task, Synchs, Relays, delay)
 ```
 
 As input, we have: the robot structure array `Agent`, the task structure array `Task`, a list of the slots to be synchronized `synch`, a list of relays to be coordinated `relays`, and an array containing the amount of delay in seconds and the slot delayed `[d r s]`. As output, we have the fixed plan inside of the same `Agent` and `Task` structures, and a flag indicating whether the plan was successfully repaired or not.
-
