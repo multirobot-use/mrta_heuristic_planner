@@ -1,3 +1,6 @@
+## Multi-Robot Task Allocation (MRTA) for heterogeneous teams
+
+This repository addresses a MRTA problem for heterogeneous teams. All code is written in Matlab and it includes: 1) a MILP (Mixed-Integer Linear Program) formulation of the problem, so it can be solved optimally using of-the-shelf solvers such as Gurobi; 2) a heuristic planer to compute efficiently approximate solutions; and 3) an algorithm to repair plans during mission execution in dynamic scenarios where robots may get delayed due to unexpected events. 
 
 For a complete description of the problem and the algorithms, you can read our related publications: 
 
